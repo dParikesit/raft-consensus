@@ -8,6 +8,7 @@ from typing import Any, List, Optional, Tuple
 from xmlrpc.client import ServerProxy
 
 from lib.struct.address import Address
+from lib.struct.response import ResponseEncoder, ResponseDecoder, Response, MembershipResponse
 
 
 class RaftNode:
@@ -61,27 +62,21 @@ class RaftNode:
 
     def __try_to_apply_membership(self, contact_addr: Address):
         redirected_addr = contact_addr
-        response = {
-            "status": "redirected",
-            "address": {
-                "ip":   contact_addr.ip,
-                "port": contact_addr.port,
-            }
-        }
-        while response["status"] != "success":
-            redirected_addr = Address(response["address"]["ip"], response["address"]["port"])
+        response = MembershipResponse("redirected", contact_addr)
+        while response.status != "success":
+            redirected_addr = Address(response.address.ip, response.address.port)
             response        = self.__send_request(self.address, "apply_membership", redirected_addr)
-        self.log                 = response["log"]
-        self.cluster_addr_list   = response["cluster_addr_list"]
+        self.log                 = response.log
+        self.cluster_addr_list   = response.cluster_addr_list
         self.cluster_leader_addr = redirected_addr
 
-    def __send_request(self, request: Any, rpc_name: str, addr: Address) -> "json":
+    def __send_request(self, request: Any, rpc_name: str, addr: Address) -> Any:
         # Warning : This method is blocking
         node         = ServerProxy(f"http://{addr.ip}:{addr.port}")
         json_request = json.dumps(request)
         rpc_function = getattr(node, rpc_name)
-        response     = json.loads(rpc_function(json_request))
-        self.__print_log(response)
+        response     = json.loads(rpc_function(json_request), cls=ResponseDecoder)
+        self.__print_log(str(response))
         return response
 
     # Inter-node RPCs
@@ -93,16 +88,12 @@ class RaftNode:
         }
         return json.dumps(response)
     
-    def apply_membership(self, json_request: str) -> "json":
+    def apply_membership(self, json_request: str) -> str:
         request = json.loads(json_request)
         self.cluster_addr_list.append(request)
-        response = {
-            "status": "success",
-            "cluster_addr_list": self.cluster_addr_list,
-            "log": "gatau apa isinya"
-        }
-        print(self.cluster_addr_list)
-        return json.dumps(response)
+        response = MembershipResponse("success", self.address, self.log, self.cluster_addr_list)
+        print(response)
+        return json.dumps(response, cls=ResponseEncoder)
 
     # Client RPCs
     def execute(self, json_request: str) -> "json":

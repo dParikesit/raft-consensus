@@ -2,13 +2,13 @@ from typing import Deque
 from collections import deque
 
 class MessageQueue:
-    __slots__ = ('_queue')
+    __slots__ = ('__queue')
 
     def __init__(self) -> None:
-        self._queue: Deque[str] = deque()
+        self.__queue: Deque[str] = deque()
     
     def enqueue(self, item: str):
-        self._queue.append(item)
+        self.__queue.append(item)
     
     def dequeue(self) -> str:
-        return self._queue.popleft()
+        return self.__queue.popleft()

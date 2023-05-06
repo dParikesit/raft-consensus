@@ -1,4 +1,4 @@
-from json import JSONEncoder, JSONDecoder, dumps
+from json import JSONDecoder, JSONEncoder, dumps
 from typing import Any, List, Tuple
 
 from lib.struct.address import Address
@@ -8,6 +8,7 @@ class ResponseEncoder(JSONEncoder):
     def default(self, o: Any) -> Any:
         if isinstance(o, MembershipResponse):
             return {
+                "type": o.type,
                 "status": o.status,
                 "address": {
                     "ip": o.address.ip,
@@ -17,7 +18,7 @@ class ResponseEncoder(JSONEncoder):
                 "cluster_addr_list": o.cluster_addr_list
             }
         if isinstance(o, Response):
-            return {"status": o.status}
+            return {"type": o.type, "status": o.status}
         return super().default(o)
     
 class ResponseDecoder(JSONDecoder):
@@ -25,16 +26,17 @@ class ResponseDecoder(JSONDecoder):
         JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
     
     def object_hook(self, obj):
-        if isinstance(obj, dict):
-            if "status" in obj and "address" in obj and "log" in obj and "cluster_addr_list" in obj:
+        if isinstance(obj, dict) and "type" in obj:
+            if obj["type"] == 'MembershipResponse':
                 return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]), obj["log"], obj["cluster_addr_list"])
         return obj
 
 class Response:
-    __slots__ = ('status')
+    __slots__ = ('status', 'type')
 
-    def __init__(self, status: str) -> None:
+    def __init__(self, status: str, type: str) -> None:
         self.status: str = status
+        self.type: str = type
 
     def __str__(self) -> str:
         return dumps(self, cls=ResponseEncoder)
@@ -46,7 +48,7 @@ class MembershipResponse(Response):
     __slots__ = ('address', 'log', 'cluster_addr_list')
 
     def __init__(self, status: str, address: Address, log: List[Tuple[str, str]] = [], cluster_addr_list: List[Address] = []) -> None:
-        super().__init__(status)
+        super().__init__(status, 'MembershipResponse')
         self.address: Address                   = address
         self.log: List[Tuple[str, str]]         = log
         self.cluster_addr_list:   List[Address] = cluster_addr_list

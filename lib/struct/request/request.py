@@ -2,6 +2,7 @@ from json import JSONDecoder, JSONEncoder, dumps
 from typing import Any, List, Tuple
 
 from lib.struct.address import Address
+from lib.struct.request.body import AppendEntriesBody
 
 
 class RequestEncoder(JSONEncoder):
@@ -56,9 +57,15 @@ class Request:
 class StringRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: str) -> None:
         super().__init__("StringRequest", dest, func_name)
-        self.body = body
+        self.body: str = body
 
 class AddressRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: Address) -> None:
         super().__init__("AddressRequest", dest, func_name)
-        self.body = body
+        self.body: Address = body
+
+class AppendEntriesRequest(Request):
+    def __init__(self, dest: Address, func_name: str, body: AppendEntriesBody) -> None:
+        super().__init__("AppendEntriesRequest", dest, func_name)
+        self.body: AppendEntriesBody = body
+

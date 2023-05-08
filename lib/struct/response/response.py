@@ -2,6 +2,7 @@ from json import JSONDecoder, JSONEncoder, dumps
 from typing import Any, List, Tuple
 
 from lib.struct.address import Address
+from lib.struct.logEntry import LogEntry
 
 
 class ResponseEncoder(JSONEncoder):
@@ -39,7 +40,7 @@ class Response:
         self.type: str = type
 
     def __str__(self) -> str:
-        return dumps(self, cls=ResponseEncoder)
+        return dumps(self, indent=2, cls=ResponseEncoder)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -47,8 +48,8 @@ class Response:
 class MembershipResponse(Response):
     __slots__ = ('address', 'log', 'cluster_addr_list')
 
-    def __init__(self, status: str, address: Address, log: List[Tuple[str, str]] = [], cluster_addr_list: List[Address] = []) -> None:
+    def __init__(self, status: str, address: Address, log: List[LogEntry] = [], cluster_addr_list: List[Address] = []) -> None:
         super().__init__(status, 'MembershipResponse')
         self.address: Address                   = address
-        self.log: List[Tuple[str, str]]         = log
+        self.log: List[LogEntry]                = log
         self.cluster_addr_list:   List[Address] = cluster_addr_list

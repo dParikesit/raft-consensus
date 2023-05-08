@@ -8,8 +8,9 @@ from typing import Any, List, Optional, Tuple
 from xmlrpc.client import ServerProxy
 
 from lib.struct.address import Address
-from lib.struct.response import ResponseEncoder, ResponseDecoder, Response, MembershipResponse
-from lib.struct.request import Request, RequestEncoder, RequestDecoder, StringRequest, AddressRequest
+from lib.struct.response.response import ResponseEncoder, ResponseDecoder, Response, MembershipResponse
+from lib.struct.request.request import Request, RequestEncoder, RequestDecoder, StringRequest, AddressRequest
+from lib.struct.logEntry import LogEntry
 
 
 class RaftNode:
@@ -27,7 +28,7 @@ class RaftNode:
         socket.setdefaulttimeout(RaftNode.RPC_TIMEOUT)
         self.address:             Address               = addr
         self.type:                RaftNode.NodeType     = RaftNode.NodeType.FOLLOWER
-        self.log:                 List[Tuple[str, str]] = []
+        self.log:                 List[LogEntry]        = []
         self.app:                 Any                   = application
         self.election_term:       int                   = 0
         self.cluster_addr_list:   List[Address]         = []

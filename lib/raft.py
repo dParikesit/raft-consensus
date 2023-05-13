@@ -26,13 +26,24 @@ class RaftNode:
 
     def __init__(self, application : Any, addr: Address, contact_addr: Optional[Address] = None):
         socket.setdefaulttimeout(RaftNode.RPC_TIMEOUT)
-        self.address:             Address               = addr
-        self.type:                RaftNode.NodeType     = RaftNode.NodeType.FOLLOWER
-        self.log:                 List[LogEntry]        = []
-        self.app:                 Any                   = application
-        self.election_term:       int                   = 0
-        self.cluster_addr_list:   List[Address]         = []
-        self.cluster_leader_addr: Optional[Address]     = None
+        # Self properties
+        self.app:                   Any                 = application
+        self.type:                  RaftNode.NodeType   = RaftNode.NodeType.FOLLOWER
+        self.address:               Address             = addr
+        self.cluster_leader_addr:   Optional[Address]   = None
+        self.cluster_addr_list:     List[Address]       = []
+
+        # Node properties
+        self.currentTerm:           int                 = 0
+        self.votedFor:              Optional[int]       = None
+        self.log:                   List[LogEntry]      = [] # First idx is 0
+        self.commitIdx:             int                 = 0
+        self.lastApplied:           int                 = 0
+        
+        # Leader properties (Not None if leader, else None)
+        self.nextIdx:               Optional[List[int]] = None
+        self.matchIdx:              Optional[List[int]] = None
+
         if contact_addr is None:
             self.cluster_addr_list.append(self.address)
             self.__initialize_as_leader()
@@ -46,8 +57,11 @@ class RaftNode:
 
     def __initialize_as_leader(self):
         self.__print_log("Initialize as leader node..." )
-        self.cluster_leader_addr = self.address
         self.type                = RaftNode.NodeType.LEADER
+        self.cluster_leader_addr = self.address
+        if self.address in self.cluster_addr_list:
+            self.cluster_addr_list.remove(self.address)
+        
         request = {
             "cluster_leader_addr": self.address
         }
@@ -59,7 +73,7 @@ class RaftNode:
         # TODO : Send periodic heartbeat
         while True:
             self.__print_log("[Leader] Sending heartbeat...")
-            pass
+            
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
 
     def __try_to_apply_membership(self, contact_addr: Address):

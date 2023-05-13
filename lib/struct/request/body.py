@@ -1,18 +1,23 @@
 from typing import List, Tuple
 
-class AppendEntriesBody:
-    __slots__ = ('term', 'leaderId', 'prevLogIndex', 'prevLogTerm', 'entries', 'leaderCommit')
+from lib.struct.logEntry import LogEntry
 
-    def __init__(self, term: int, leaderId: int, prevLogIndex: int, prevLogTerm: int, entries: List[Tuple[str, str]], leaderCommit: int) -> None:
-        self.term = term
-        self.leaderId = leaderId
-        self.prevLogIndex = prevLogIndex
-        self.prevLogTerm = prevLogTerm
-        self.entries = entries
-        self.leaderCommit = leaderCommit
+class AppendEntriesBody:
+    __slots__ = ('term', 'leaderId', 'prevLogIdx', 'prevLogTerm', 'entries', 'leaderCommit')
+
+    def __init__(self, term: int, leaderId: int, prevLogIdx: int, prevLogTerm: int, entries: List[LogEntry], leaderCommit: int) -> None:
+        self.term: int = term
+        self.leaderId: int = leaderId
+        self.prevLogIdx: int = prevLogIdx
+        self.prevLogTerm: int = prevLogTerm
+        self.entries: List[LogEntry] = entries
+        self.leaderCommit: int = leaderCommit
     
 class RequestVoteBody:
-    __slots__ = ('term', 'candidateId', 'lastLogIndex', 'lastLogTerm')
+    __slots__ = ('term', 'candidateId', 'lastLogIdx', 'lastLogTerm')
 
-    def __init__(self, term: int, candidateId: int, lastLogIndex: int, lastLogTerm: int) -> None:
-        pass
+    def __init__(self, term: int, candidateId: int, lastLogIdx: int, lastLogTerm: int) -> None:
+        self.term: int = term
+        self.candidateId: int = candidateId
+        self.lastLogIdx: int = lastLogIdx
+        self.lastLogTerm: int = lastLogTerm

@@ -8,33 +8,6 @@ from lib.struct.request.body import AppendEntriesBody, RequestVoteBody
 
 class RequestEncoder(JSONEncoder):
     def default(self, o: Any) -> Any:
-        if isinstance(o, Address):
-            return {
-                "ip": o.ip,
-                "port": o.port
-            }
-        if isinstance(o, LogEntry):
-            return {
-                "term": o.term,
-                "operation": o.operation,
-                "status": o.status
-            }
-        if isinstance(o, AppendEntriesBody):
-            return {
-                "term": o.term,
-                "leaderId": o.leaderId,
-                "prevLogIdx": o.prevLogIdx,
-                "prevLogTerm": o.prevLogTerm,
-                "entries": o.entries,
-                "leaderCommit": o.leaderCommit
-            }
-        if isinstance(o, RequestVoteBody):
-            return {
-                "term": o.term,
-                "candidateId": o.candidateId,
-                "lastLogIdx": o.lastLogIdx,
-                "lastLogTerm": o.lastLogTerm
-            }
         if isinstance(o, Request):
             return {
                 "type": o.type, 
@@ -50,21 +23,21 @@ class RequestDecoder(JSONDecoder):
     
     def object_hook(self, obj):
         if isinstance(obj, dict) and "type" in obj:
-            if obj["type"] == 'StringRequest':
-                return StringRequest(obj["dest"], obj["func_name"], obj["body"])
-            if obj["type"] == 'AddressRequest':
-                return AddressRequest(obj["dest"], obj["func_name"], Address(obj["body"]["ip"], obj["body"]["port"]))
             if obj["type"] == 'AppendEntriesRequest':
                 return AppendEntriesRequest(obj["dest"], obj["func_name"], AppendEntriesBody(obj["body"]["term"], obj["body"]["leaderId"], obj["body"]["prevLogIdx"], obj["body"]["prevLogTerm"], obj["body"]["entries"], obj["body"]["leaderCommit"]))
             if obj["type"] == 'RequestVoteEntries':
                 return RequestVoteRequest(obj["dest"], obj["func_name"], RequestVoteBody(obj["body"]["term"], obj["body"]["candidateId"], obj["body"]["lastLogIdx"], obj["body"]["lastLogTerm"]))
+            if obj["type"] == 'StringRequest':
+                return StringRequest(obj["dest"], obj["func_name"], obj["body"])
+            if obj["type"] == 'AddressRequest':
+                return AddressRequest(obj["dest"], obj["func_name"], Address(obj["body"]["ip"], obj["body"]["port"]))
         return obj
 
 class Request:
     __slots__ = ('type', 'dest', 'func_name', 'body')
 
     def __init__(self, type: str, dest: Address, func_name: str) -> None:
-        self.type           = type
+        self.type: str      = type
         self.dest: Address  = dest
         self.func_name: str = func_name
 

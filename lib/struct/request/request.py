@@ -2,30 +2,46 @@ from json import JSONDecoder, JSONEncoder, dumps
 from typing import Any, List, Tuple
 
 from lib.struct.address import Address
-from lib.struct.request.body import AppendEntriesBody
+from lib.struct.logEntry import LogEntry
+from lib.struct.request.body import AppendEntriesBody, RequestVoteBody
 
 
 class RequestEncoder(JSONEncoder):
     def default(self, o: Any) -> Any:
-        if isinstance(o, StringRequest):
+        if isinstance(o, Address):
             return {
-                "type": o.type, 
-                "dest": o.dest, 
-                "func_name": o.func_name,
-                "body": o.body
+                "ip": o.ip,
+                "port": o.port
             }
-        if isinstance(o, AddressRequest):
+        if isinstance(o, LogEntry):
             return {
-                "type": o.type, 
-                "dest": o.dest, 
-                "func_name": o.func_name,
-                "body": {
-                    "ip": o.body.ip,
-                    "port": o.body.port
-                }
+                "term": o.term,
+                "operation": o.operation,
+                "status": o.status
+            }
+        if isinstance(o, AppendEntriesBody):
+            return {
+                "term": o.term,
+                "leaderId": o.leaderId,
+                "prevLogIdx": o.prevLogIdx,
+                "prevLogTerm": o.prevLogTerm,
+                "entries": o.entries,
+                "leaderCommit": o.leaderCommit
+            }
+        if isinstance(o, RequestVoteBody):
+            return {
+                "term": o.term,
+                "candidateId": o.candidateId,
+                "lastLogIdx": o.lastLogIdx,
+                "lastLogTerm": o.lastLogTerm
             }
         if isinstance(o, Request):
-            return {"type": o.type, "dest": o.dest, "func_name": o.func_name}
+            return {
+                "type": o.type, 
+                "dest": o.dest, 
+                "func_name": o.func_name, 
+                "body": o.body
+            }
         return super().default(o)
     
 class RequestDecoder(JSONDecoder):
@@ -38,10 +54,14 @@ class RequestDecoder(JSONDecoder):
                 return StringRequest(obj["dest"], obj["func_name"], obj["body"])
             if obj["type"] == 'AddressRequest':
                 return AddressRequest(obj["dest"], obj["func_name"], Address(obj["body"]["ip"], obj["body"]["port"]))
+            if obj["type"] == 'AppendEntriesRequest':
+                return AppendEntriesRequest(obj["dest"], obj["func_name"], AppendEntriesBody(obj["body"]["term"], obj["body"]["leaderId"], obj["body"]["prevLogIdx"], obj["body"]["prevLogTerm"], obj["body"]["entries"], obj["body"]["leaderCommit"]))
+            if obj["type"] == 'RequestVoteEntries':
+                return RequestVoteRequest(obj["dest"], obj["func_name"], RequestVoteBody(obj["body"]["term"], obj["body"]["candidateId"], obj["body"]["lastLogIdx"], obj["body"]["lastLogTerm"]))
         return obj
 
 class Request:
-    __slots__ = ('type','dest', 'func_name', 'body')
+    __slots__ = ('type', 'dest', 'func_name', 'body')
 
     def __init__(self, type: str, dest: Address, func_name: str) -> None:
         self.type           = type
@@ -69,3 +89,7 @@ class AppendEntriesRequest(Request):
         super().__init__("AppendEntriesRequest", dest, func_name)
         self.body: AppendEntriesBody = body
 
+class RequestVoteRequest(Request):
+    def __init__(self, dest: Address, func_name: str, body: RequestVoteBody) -> None:
+        super().__init__("RequestVoteRequest", dest, func_name)
+        self.body: RequestVoteBody = body

@@ -9,8 +9,9 @@ from enum import Enum
 from typing import Any, Optional
 from xmlrpc.client import ServerProxy
 
-from lib.struct.request.request import Request, RequestEncoder
-from lib.struct.response.response import Response, ResponseDecoder
+from lib.struct.request.request import Request, RequestEncoder, ClientRequest
+from lib.struct.response.response import Response, ResponseDecoder, ClientRequestResponse
+from lib.struct.request.body import ClientRequestBody
 
 
 class ExecuteCmd(Enum):
@@ -25,23 +26,36 @@ class Client:
         self.port = port
         self.server = server
     
-    def __print_response(self, res: Response):
+    def __print_response(self, res: ClientRequestResponse):
         if isinstance(res, Response):
-            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] {res.status}")
+            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] Request ({res.requestNumber}) {res.status}!")
         # Disini kamu bikin class Response di response.py sebagai template response buat method execute n request_log
 
-    def __send_request(self, req: Request) -> None:
+    def __send_request(self, req: ClientRequest) -> Any:
         json_request = json.dumps(req, cls=RequestEncoder)
         rpc_function = getattr(self.server, req.func_name)
         response = json.loads(rpc_function(json_request), cls=ResponseDecoder)
-        self.__print_response(response)
+
+        return response
+    
+    def __print_request(self, res: ClientRequest):
+        print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] Request ({res.body.requestNumber}) {res.body.command} sent!")
+
 
     def execute(self, command: ExecuteCmd, param: Optional[str]):
         # Command yang boleh cuma enqueue(angka) dan dequeue
         if command == ExecuteCmd.ENQUEUE:
             if param is not None:
-                print("enqueue")
-                # self.__send_request()
+                contact_addr = self.ip + ":" + str(self.port)
+                requestBody = ClientRequestBody(1, f"execute({param})")
+                request = ClientRequest(contact_addr, "execute", requestBody)
+                response = ClientRequestResponse(1, "failed")
+
+                while response.status != "success":
+                    self.__print_request(request)
+                    response = self.__send_request(request)
+
+                self.__print_response(response)
         elif command == ExecuteCmd.DEQUEUE:
             print("dequeue")
             pass
@@ -56,8 +70,8 @@ class Client:
         
 
 if __name__ == "__main__":
-    print("Starting client")
-    
+    print("Starting client\n")
+    contact_addr = sys.argv[1] + ":" + sys.argv[2]
     server = ServerProxy(f"http://{sys.argv[1]}:{int(sys.argv[2])}")
 
     # Trus disini kamu coba bikin handling what if server nya bukan leader

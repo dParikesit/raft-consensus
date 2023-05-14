@@ -8,7 +8,7 @@ from typing import Any, List, Optional, Tuple
 from xmlrpc.client import ServerProxy
 
 from lib.struct.address import Address
-from lib.struct.response.response import ResponseEncoder, ResponseDecoder, Response, MembershipResponse
+from lib.struct.response.response import ResponseEncoder, ResponseDecoder, Response, MembershipResponse, ClientRequestResponse
 from lib.struct.request.request import Request, RequestEncoder, RequestDecoder, StringRequest, AddressRequest
 from lib.struct.logEntry import LogEntry
 
@@ -115,5 +115,9 @@ class RaftNode:
     # Client RPCs
     def execute(self, json_request: str) -> "json":
         request = json.loads(json_request)
+        print("Request from Client\n", request, "\n")
+        
+        response = ClientRequestResponse(request["body"]["requestNumber"], "success")
+        print("Response to Client", response, "\n")
         # TODO : Implement execute
-        return json.dumps(request)
+        return json.dumps(response, cls=ResponseEncoder)

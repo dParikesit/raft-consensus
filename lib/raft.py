@@ -103,7 +103,7 @@ class RaftNode:
         return response
 
     # Inter-node RPCs
-    def heartbeat(self, json_request: str) -> "json":
+    def heartbeat(self, json_request: str) -> str:
         # TODO : Implement heartbeat
         response = {
             "term": self.currentTerm + 1,
@@ -125,11 +125,11 @@ class RaftNode:
         return json.dumps(response, cls=ResponseEncoder)
 
     # Client RPCs
-    def execute(self, json_request: str) -> "json":
-        request = json.loads(json_request)
+    def execute(self, json_request: str) -> str:
+        request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
         print("Request from Client\n", request, "\n")
         
-        response = ClientRequestResponse(request["body"]["requestNumber"], "success")
+        response = ClientRequestResponse(request.body.requestNumber, "success")
         print("Response to Client", response, "\n")
         # TODO : Implement execute
         return json.dumps(response, cls=ResponseEncoder)

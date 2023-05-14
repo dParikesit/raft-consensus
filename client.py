@@ -12,6 +12,7 @@ from xmlrpc.client import ServerProxy
 from lib.struct.request.request import Request, RequestEncoder, ClientRequest
 from lib.struct.response.response import Response, ResponseDecoder, ClientRequestResponse
 from lib.struct.request.body import ClientRequestBody
+from lib.struct.address import Address
 
 
 class ExecuteCmd(Enum):
@@ -46,7 +47,7 @@ class Client:
         # Command yang boleh cuma enqueue(angka) dan dequeue
         if command == ExecuteCmd.ENQUEUE:
             if param is not None:
-                contact_addr = self.ip + ":" + str(self.port)
+                contact_addr = Address(self.ip, int(self.port))
                 requestBody = ClientRequestBody(1, f"execute({param})")
                 request = ClientRequest(contact_addr, "execute", requestBody)
                 response = ClientRequestResponse(1, "failed")
@@ -71,7 +72,6 @@ class Client:
 
 if __name__ == "__main__":
     print("Starting client\n")
-    contact_addr = sys.argv[1] + ":" + sys.argv[2]
     server = ServerProxy(f"http://{sys.argv[1]}:{int(sys.argv[2])}")
 
     # Trus disini kamu coba bikin handling what if server nya bukan leader
@@ -82,13 +82,13 @@ if __name__ == "__main__":
 
     # Nah kalo udah baru input command dkk. Di wrap pake while true dkk serah kamu
     try:
-        command = 0
+        command = ExecuteCmd.ENQUEUE
         param = None
         if (sys.argv[3] == "enqueue") :
-            command = ExecuteCmd(1)
+            command = ExecuteCmd.ENQUEUE
             param = sys.argv[4]
         elif (sys.argv[3] == "dequeue"):
-            command = ExecuteCmd(2)
+            command = ExecuteCmd.DEQUEUE
         
         client.execute(command, param)
         

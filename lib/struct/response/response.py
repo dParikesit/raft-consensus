@@ -7,6 +7,20 @@ from lib.struct.logEntry import LogEntry
 
 class ResponseEncoder(JSONEncoder):
     def default(self, o: Any) -> Any:
+        if isinstance(o, Address):
+            return {
+                "ip": o.ip,
+                "port": o.port
+            }
+        if isinstance(o, LogEntry):
+            return{
+                "term": o.term,
+                "idx": o.idx,
+                "clientId": o.clientId,
+                "operation": o.operation,
+                "reqNum": o.reqNum,
+                "result": o.result
+            }
         if isinstance(o, AppendEntriesResponse):
             return {
                 "type": o.type,

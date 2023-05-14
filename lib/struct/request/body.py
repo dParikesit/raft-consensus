@@ -2,11 +2,10 @@ from typing import List, Tuple
 
 from lib.struct.logEntry import LogEntry
 
-class AppendEntriesBody(dict):
+class AppendEntriesBody():
     __slots__ = ('term', 'leaderId', 'prevLogIdx', 'prevLogTerm', 'entries', 'leaderCommit')
 
     def __init__(self, term: int, leaderId: int, prevLogIdx: int, prevLogTerm: int, entries: List[LogEntry], leaderCommit: int) -> None:
-        dict.__init__(self, term=term, leaderId=leaderId, prevLogIdx=prevLogIdx, prevLogTerm=prevLogTerm, entries=entries, leaderCommit=leaderCommit)
         self.term: int = term
         self.leaderId: int = leaderId
         self.prevLogIdx: int = prevLogIdx

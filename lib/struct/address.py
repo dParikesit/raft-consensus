@@ -1,6 +1,7 @@
-class Address(dict):
+class Address():
+    __slots__ = ('ip', 'port')
+    
     def __init__(self, ip: str, port: int):
-        dict.__init__(self, ip=ip, port=port)
         self.ip   = ip
         self.port = port
     

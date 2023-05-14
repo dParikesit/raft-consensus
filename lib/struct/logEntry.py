@@ -1,6 +1,6 @@
 from typing import Optional
 from lib.struct.address import Address
-class LogEntry(dict):
+class LogEntry():
     # Ini boleh diganti. Aku belom kepikiran log nya mau diisi apa aja
     __slots__ = ('term', 'idx', 'clientId', 'operation', 'reqNum', 'result')
 
@@ -11,7 +11,6 @@ class LogEntry(dict):
     # result isinya hasil operasi
 
     def __init__(self, term: int, idx: int, clientId: Address, operation: str, reqNum: int, result:  Optional[str]) -> None:
-        dict.__init__(self, term=term, idx=idx, clientId=clientId, operation=operation, reqNum=reqNum, result=result)
         self.term: int              = term
         self.idx: int               = idx
         self.clientId: Address      = clientId

@@ -27,18 +27,14 @@ class ResponseEncoder(JSONEncoder):
                 "log": o.log,
                 "cluster_addr_list": o.cluster_addr_list
             }
-        
         if isinstance(o, ClientRequestResponse):
             return {
                 "type": o.type,
                 "requestNumber": o.requestNumber,
                 "status": o.status
             }
-        
         if isinstance(o, Response):
             return {"type": o.type}
-    
-
         return super().default(o)
     
 class ResponseDecoder(JSONDecoder):

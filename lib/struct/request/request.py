@@ -8,17 +8,47 @@ from lib.struct.request.body import AppendEntriesBody, RequestVoteBody, ClientRe
 
 class RequestEncoder(JSONEncoder):
     def default(self, o: Any) -> Any:
+        if isinstance(o, Address):
+            return {
+                "ip": o.ip,
+                "port": o.port
+            }
+        if isinstance(o, LogEntry):
+            return{
+                "term": o.term,
+                "idx": o.idx,
+                "clientId": o.clientId,
+                "operation": o.operation,
+                "reqNum": o.reqNum,
+                "result": o.result
+            }
+        if isinstance(o, AppendEntriesBody):
+            return{
+                "term": o.term,
+                "leaderId": o.leaderId,
+                "prevLogIdx": o.prevLogIdx,
+                "prevLogTerm": o.prevLogTerm,
+                "entries": o.entries,
+                "leaderCommit": o.leaderCommit
+            }
+        if isinstance(o, RequestVoteBody):
+            return {
+                "term": o.term,
+                "candidateId": o.candidateId,
+                "lastLogIdx": o.lastLogIdx,
+                "lastLogTerm": o.lastLogTerm
+            }
+        if isinstance(o, ClientRequestBody):
+            return{
+                "requestNumber": o.requestNumber,
+                "command": o.command
+            }
         if isinstance(o, Request):
             return {
                 "type": o.type, 
                 "dest": o.dest, 
                 "func_name": o.func_name, 
                 "body": o.body
-            }
-        if(isinstance(o, ClientRequestBody)):
-            return{
-                "requestNumber": o.requestNumber,
-                "command": o.command
             }
         return super().default(o)
     

@@ -8,8 +8,9 @@ from typing import Any, List, Optional, Tuple
 from xmlrpc.client import ServerProxy
 
 from lib.struct.address import Address
+from lib.struct.request.body import AppendEntriesBody
 from lib.struct.response.response import ResponseEncoder, ResponseDecoder, Response, MembershipResponse, ClientRequestResponse, AppendEntriesResponse
-from lib.struct.request.request import Request, RequestEncoder, RequestDecoder, StringRequest, AddressRequest, AppendEntriesRequest
+from lib.struct.request.request import ClientRequest, Request, RequestEncoder, RequestDecoder, StringRequest, AddressRequest, AppendEntriesRequest
 from lib.struct.logEntry import LogEntry
 
 
@@ -132,4 +133,46 @@ class RaftNode:
         response = ClientRequestResponse(request.body.requestNumber, "success")
         print("Response to Client", response, "\n")
         # TODO : Implement execute
+        self.log_replication(request)
+
+        return json.dumps(response, cls=ResponseEncoder)
+    
+    def log_replication(self, request:ClientRequest):
+        print("Log Replication")
+
+        log_entry = LogEntry(self.currentTerm, self.commitIdx, request.dest, 
+                             request.body.command, request.body.requestNumber, None)
+        self.log.append(log_entry)
+
+        entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, self.commitIdx, 
+                                                       self.lastApplied, self.log, self.commitIdx)
+
+        print("Sending log replication request to all nodes...")
+        print("AppendEntriesBody", entries, "\n")
+
+        ack_array = [False] * len(self.cluster_addr_list)
+
+        while sum(bool(x) for x in ack_array) < (len(self.cluster_addr_list) // 2) + 1:
+            for i in range(len(self.cluster_addr_list)):
+                if ack_array[i] == False:
+                    request = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
+                    response: AppendEntriesResponse = self.__send_request(request)
+                    if response.success == True:
+                        ack_array[i] = True
+
+        print("Log replication success...")
+        print("Committing log...")
+        self.log[len(self.log) - 1].result = "Committed"
+        print("Leader Log: ", self.log, "\n")
+
+
+    def receiver_replicate_log(self, json_request: str):
+        request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
+        print("Request from Leader:\n", request, "\n")
+
+        self.log.append(request.body.entries[len(request.body.entries) - 1])
+        print("Success append log to follower...")
+        print("Follower Log: ", self.log, "\n")
+        response = AppendEntriesResponse(self.currentTerm, True)
+
         return json.dumps(response, cls=ResponseEncoder)

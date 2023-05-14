@@ -8,8 +8,8 @@ from typing import Any, List, Optional, Tuple
 from xmlrpc.client import ServerProxy
 
 from lib.struct.address import Address
-from lib.struct.response.response import ResponseEncoder, ResponseDecoder, Response, MembershipResponse, ClientRequestResponse
-from lib.struct.request.request import Request, RequestEncoder, RequestDecoder, StringRequest, AddressRequest
+from lib.struct.response.response import ResponseEncoder, ResponseDecoder, Response, MembershipResponse, ClientRequestResponse, AppendEntriesResponse
+from lib.struct.request.request import Request, RequestEncoder, RequestDecoder, StringRequest, AddressRequest, AppendEntriesRequest
 from lib.struct.logEntry import LogEntry
 
 
@@ -73,7 +73,13 @@ class RaftNode:
         # TODO : Send periodic heartbeat
         while True:
             self.__print_log("[Leader] Sending heartbeat...")
-            
+            for target in self.cluster_addr_list:
+                request = AppendEntriesRequest(target, "heartbeat", self.address)
+                response = AppendEntriesResponse("success", target)
+                if(response.term != "success"):
+                    self.__print_log(f"Heartbeat to {target.ip}:{target.port} failed...")
+                else:
+                    self.__print_log(f"Heartbeat to {target.ip}:{target.port} success...")
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
 
     def __try_to_apply_membership(self, contact_addr: Address):
@@ -100,8 +106,14 @@ class RaftNode:
     def heartbeat(self, json_request: str) -> "json":
         # TODO : Implement heartbeat
         response = {
-            "heartbeat_response": "ack",
-            "address":            self.address
+            "term": self.currentTerm + 1,
+            "leaderId": self.cluster_leader_addr,
+            "prevLogIdx": 0,
+            "prevLogTerm": 0,
+            "entries": [],
+            "leaderCommit": 0
+            #"heartbeat_response": "ack",
+            #"address":            self.address
         }
         return json.dumps(response)
     

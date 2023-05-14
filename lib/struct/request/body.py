@@ -27,4 +27,4 @@ class ClientRequestBody:
 
     def __init__(self, requestNumber: int, command: str) -> None:
         self.requestNumber: int = requestNumber
-        self.command: int = command
+        self.command: str = command

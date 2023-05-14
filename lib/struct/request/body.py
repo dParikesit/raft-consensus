@@ -2,16 +2,20 @@ from typing import List, Tuple
 
 from lib.struct.logEntry import LogEntry
 
-class AppendEntriesBody:
+class AppendEntriesBody(dict):
     __slots__ = ('term', 'leaderId', 'prevLogIdx', 'prevLogTerm', 'entries', 'leaderCommit')
 
     def __init__(self, term: int, leaderId: int, prevLogIdx: int, prevLogTerm: int, entries: List[LogEntry], leaderCommit: int) -> None:
+        dict.__init__(self, term=term, leaderId=leaderId, prevLogIdx=prevLogIdx, prevLogTerm=prevLogTerm, entries=entries, leaderCommit=leaderCommit)
         self.term: int = term
         self.leaderId: int = leaderId
         self.prevLogIdx: int = prevLogIdx
         self.prevLogTerm: int = prevLogTerm
         self.entries: List[LogEntry] = entries
         self.leaderCommit: int = leaderCommit
+
+    def __str__(self):
+        return f"AppendEntriesBody(term={self.term}, leaderId={self.leaderId}, prevLogIdx={self.prevLogIdx}, prevLogTerm={self.prevLogTerm}, entries={self.entries}, leaderCommit={self.leaderCommit})"
     
 class RequestVoteBody:
     __slots__ = ('term', 'candidateId', 'lastLogIdx', 'lastLogTerm')

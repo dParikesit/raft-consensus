@@ -3,7 +3,7 @@ from typing import Any, List, Tuple
 
 from lib.struct.address import Address
 from lib.struct.logEntry import LogEntry
-from lib.struct.request.body import AppendEntriesBody, RequestVoteBody
+from lib.struct.request.body import AppendEntriesBody, RequestVoteBody, ClientRequestBody
 
 
 class RequestEncoder(JSONEncoder):
@@ -14,6 +14,11 @@ class RequestEncoder(JSONEncoder):
                 "dest": o.dest, 
                 "func_name": o.func_name, 
                 "body": o.body
+            }
+        if(isinstance(o, ClientRequestBody)):
+            return{
+                "requestNumber": o.requestNumber,
+                "command": o.command
             }
         return super().default(o)
     
@@ -31,6 +36,8 @@ class RequestDecoder(JSONDecoder):
                 return StringRequest(obj["dest"], obj["func_name"], obj["body"])
             if obj["type"] == 'AddressRequest':
                 return AddressRequest(obj["dest"], obj["func_name"], Address(obj["body"]["ip"], obj["body"]["port"]))
+            if obj["type"] == 'ClientRequest':
+                return ClientRequest(obj["dest"], obj["func_name"], ClientRequestBody(obj["body"]["requestNumber"], obj["body"]["command"]))
         return obj
 
 class Request:
@@ -66,3 +73,8 @@ class RequestVoteRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: RequestVoteBody) -> None:
         super().__init__("RequestVoteRequest", dest, func_name)
         self.body: RequestVoteBody = body
+
+class ClientRequest(Request):
+    def __init__(self, dest: Address, func_name: str, body: ClientRequestBody) -> None:
+        super().__init__("ClientRequest", dest, func_name)
+        self.body: ClientRequestBody = body

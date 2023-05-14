@@ -21,3 +21,10 @@ class RequestVoteBody:
         self.candidateId: int = candidateId
         self.lastLogIdx: int = lastLogIdx
         self.lastLogTerm: int = lastLogTerm
+
+class ClientRequestBody:
+    __slots__ = ('requestNumber', 'command')
+
+    def __init__(self, requestNumber: int, command: str) -> None:
+        self.requestNumber: int = requestNumber
+        self.command: int = command

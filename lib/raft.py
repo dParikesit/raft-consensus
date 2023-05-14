@@ -137,11 +137,11 @@ class RaftNode:
 
         return json.dumps(response, cls=ResponseEncoder)
     
-    def log_replication(self, request:ClientRequest):
+    def log_replication(self, cliReq: ClientRequest):
         print("Log Replication")
 
-        log_entry = LogEntry(self.currentTerm, self.commitIdx, request.dest, 
-                             request.body.command, request.body.requestNumber, None)
+        log_entry = LogEntry(self.currentTerm, self.commitIdx, cliReq.dest, 
+                             cliReq.body.command, cliReq.body.requestNumber, None)
         self.log.append(log_entry)
 
         entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, self.commitIdx, 
@@ -155,7 +155,7 @@ class RaftNode:
         while sum(bool(x) for x in ack_array) < (len(self.cluster_addr_list) // 2) + 1:
             for i in range(len(self.cluster_addr_list)):
                 if ack_array[i] == False:
-                    request = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
+                    request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
                     response: AppendEntriesResponse = self.__send_request(request)
                     if response.success == True:
                         ack_array[i] = True

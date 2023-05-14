@@ -9,7 +9,7 @@ from xmlrpc.client import ServerProxy
 
 from lib.struct.address import Address
 from lib.struct.response.response import ResponseEncoder, ResponseDecoder, Response, MembershipResponse, ClientRequestResponse
-from lib.struct.request.request import Request, RequestEncoder, RequestDecoder, StringRequest, AddressRequest
+from lib.struct.request.request import Request, RequestEncoder, RequestDecoder, StringRequest, AddressRequest, ClientRequest
 from lib.struct.logEntry import LogEntry
 
 
@@ -97,7 +97,7 @@ class RaftNode:
         return response
 
     # Inter-node RPCs
-    def heartbeat(self, json_request: str) -> "json":
+    def heartbeat(self, json_request: str) -> str:
         # TODO : Implement heartbeat
         response = {
             "heartbeat_response": "ack",
@@ -113,11 +113,11 @@ class RaftNode:
         return json.dumps(response, cls=ResponseEncoder)
 
     # Client RPCs
-    def execute(self, json_request: str) -> "json":
-        request = json.loads(json_request)
+    def execute(self, json_request: str) -> str:
+        request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
         print("Request from Client\n", request, "\n")
         
-        response = ClientRequestResponse(request["body"]["requestNumber"], "success")
+        response = ClientRequestResponse(request.body.requestNumber, "success")
         print("Response to Client", response, "\n")
         # TODO : Implement execute
         return json.dumps(response, cls=ResponseEncoder)

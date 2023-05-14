@@ -47,7 +47,7 @@ class Client:
         # Command yang boleh cuma enqueue(angka) dan dequeue
         if command == ExecuteCmd.ENQUEUE:
             if param is not None:
-                contact_addr = Address(self.ip, str(self.port))
+                contact_addr = Address(self.ip, int(self.port))
                 requestBody = ClientRequestBody(1, f"execute({param})")
                 request = ClientRequest(contact_addr, "execute", requestBody)
                 response = ClientRequestResponse(1, "failed")
@@ -82,13 +82,13 @@ if __name__ == "__main__":
 
     # Nah kalo udah baru input command dkk. Di wrap pake while true dkk serah kamu
     try:
-        command = 0
+        command = ExecuteCmd.ENQUEUE
         param = None
         if (sys.argv[3] == "enqueue") :
-            command = ExecuteCmd(1)
+            command = ExecuteCmd.ENQUEUE
             param = sys.argv[4]
         elif (sys.argv[3] == "dequeue"):
-            command = ExecuteCmd(2)
+            command = ExecuteCmd.DEQUEUE
         
         client.execute(command, param)
         

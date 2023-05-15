@@ -45,12 +45,12 @@ class RaftNode:
         self.nextIdx:               Optional[List[int]] = None
         self.matchIdx:              Optional[List[int]] = None
 
+        self.__print_log("Server Start Time")
         if contact_addr is None:
             self.cluster_addr_list.append(self.address)
             self.__initialize_as_leader()
         else:
             self.__try_to_apply_membership(contact_addr)
-            pass
 
     # Internal Raft Node methods
     def __print_log(self, text: str):
@@ -89,11 +89,20 @@ class RaftNode:
         response = MembershipResponse("redirected", contact_addr)
         while response.status != "success":
             redirected_addr = Address(response.address.ip, response.address.port)
-            response        = self.__send_request(request)
+            response        = asyncio.get_event_loop().run_until_complete(self.__send_request_async(request))
         self.log                 = response.log
         self.cluster_addr_list   = response.cluster_addr_list
         self.cluster_leader_addr = redirected_addr
 
+    async def __send_request_async(self, req: Request) -> Any:
+        node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
+        json_request = json.dumps(req, cls=RequestEncoder)
+        rpc_function = getattr(node, req.func_name)
+        result = rpc_function(json_request)
+        response     = json.loads(result, cls=ResponseDecoder)
+        self.__print_log(str(response))
+        return response
+    
     def __send_request(self, req: Request) -> Any:
         # Warning : This method is blocking
         node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
@@ -118,9 +127,31 @@ class RaftNode:
         }
         return json.dumps(response)
     
+    async def __send_membership(self, request: Request):
+        cluster_addr_send_list = self.cluster_addr_list.copy()
+        cluster_addr_send_list.remove(request.body)
+        while len(cluster_addr_send_list) > 0:
+            tasks = []
+            for i in range(len(cluster_addr_send_list)):
+                cluster_addr = cluster_addr_send_list[i]
+                request = AddressRequest(cluster_addr, "apply_membership", request.body)
+                task = asyncio.ensure_future(self.__send_request_async(request))
+                tasks.append(task)
+            responses = await asyncio.gather(*tasks)
+            
+            cluster_addr_send_list_new = []
+            for i in range(len(responses)):
+                response = responses[i]
+                if response.status != 'success':
+                    cluster_addr_send_list_new.append(cluster_addr_send_list[i])
+            cluster_addr_send_list = cluster_addr_send_list_new
+    
     def apply_membership(self, json_request: str) -> str:
         request: AddressRequest = json.loads(json_request, cls=RequestDecoder)
         self.cluster_addr_list.append(request.body)
+        if self.address == self.cluster_leader_addr and len(self.cluster_addr_list) > 0:
+            thr = Thread(target=asyncio.run, daemon=True, args=[self.__send_membership(request)])
+            thr.start()
         response = MembershipResponse("success", self.address, self.log, self.cluster_addr_list)
         print(response)
         return json.dumps(response, cls=ResponseEncoder)

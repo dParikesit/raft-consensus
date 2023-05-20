@@ -49,15 +49,13 @@ class Client:
             # print(res.result)
         
         if isinstance(res, ClientRiderectResponse):
-            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request redirected to [{self.ip}:{self.port}]!")
+            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request redirected to [{self.ip}:{self.port}]!\n")
         # Disini kamu bikin class Response di response.py sebagai template response buat method execute n request_log
 
     def __send_request(self, req: ClientRequest) -> Any:
         json_request = json.dumps(req, cls=RequestEncoder)
-        # rpc_function = getattr(self.server, req.func_name)
-        # response = json.loads(rpc_function(json_request), cls=ResponseDecoder)
-        proxy = self.server
-        response = json.loads(self.server.execute(json_request), cls=ResponseDecoder)
+        rpc_function = getattr(self.server, req.func_name)
+        response = json.loads(rpc_function(json_request), cls=ResponseDecoder)
 
         return response
     

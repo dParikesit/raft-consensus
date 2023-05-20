@@ -1,5 +1,5 @@
 from json import JSONDecoder, JSONEncoder, dumps
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Optional
 
 from lib.struct.address import Address
 from lib.struct.logEntry import LogEntry
@@ -117,7 +117,7 @@ class RequestVoteResponse(Response):
 class ClientRequestResponse(Response):
     __slots__ = ('requestNumber', 'status', 'result')
 
-    def __init__(self, requestNumber: int, status: str, result: str) -> None:
+    def __init__(self, requestNumber: int, status: str, result: Optional[str]) -> None:
         super().__init__("ClientRequestResponse")
         self.requestNumber: int     = requestNumber
         self.status:   str          = status

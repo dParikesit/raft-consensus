@@ -92,12 +92,11 @@ class RaftNode:
         while True:
             self.__print_log("[Leader] Sending heartbeat...")
             if(len(self.cluster_addr_list) > 0):
-                isExcept = False
-                self.lastApplied += 1
-                self.nextIdx = len(self.log)
-                ack_array = [False] * len(self.cluster_addr_list)
+                for i in range(len(self.cluster_addr_list)):
+                    self.lastApplied += 1
+                    self.nextIdx = len(self.log)
+                    ack_array = [False] * len(self.cluster_addr_list)
 
-                while sum(bool(x) for x in ack_array) < (len(self.cluster_addr_list) // 2) + 1 and not isExcept:
                     if (self.nextIdx > 1):
                         self.nextIdx -= 1
                         prevLogIdx = self.log[self.nextIdx - 1].idx
@@ -108,22 +107,20 @@ class RaftNode:
                         prevLogTerm = -1
 
                     entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, prevLogIdx, prevLogTerm, [], self.nextIdx)
+                    if ack_array[i] == False:
+                        try:
+                            request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
+                            response: AppendEntriesResponse = self.__send_request(request)
+                            if response.success == True:
+                                ack_array[i] = True
+                                self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} success...")
+                            else:
+                                self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} failed...")
+                        except:
+                            self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} died...")
+                            self.__print_log(f"Node {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} will be deleted...")
+                            self.cluster_addr_list.pop(i)
 
-                    for i in range(len(self.cluster_addr_list)):
-                        if ack_array[i] == False:
-                            try:
-                                request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
-                                response: AppendEntriesResponse = self.__send_request(request)
-                                if response.success == True:
-                                    ack_array[i] = True
-                                    self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} success...")
-                                else:
-                                    self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} failed...")
-                            except:
-                                self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} died...")
-                                self.__print_log(f"Node {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} will be deleted...")
-                                self.cluster_addr_list.pop(i)
-                                isExcept = True
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
             '''
             for target in self.cluster_addr_list:

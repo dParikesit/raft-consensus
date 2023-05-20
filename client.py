@@ -10,6 +10,8 @@ import re
 from enum import Enum
 from typing import Any, Optional
 from xmlrpc.client import ServerProxy
+import socket
+import xmlrpc.client
 
 from lib.struct.request.request import Request, RequestEncoder, ClientRequest
 from lib.struct.response.response import Response, ResponseDecoder, ClientRequestResponse
@@ -20,6 +22,17 @@ from lib.struct.address import Address
 class ExecuteCmd(Enum):
     ENQUEUE = 1
     DEQUEUE = 2
+
+class TimeoutTransport(xmlrpc.client.Transport):
+    def __init__(self, timeout=None, *args, **kwargs):
+        self.timeout = timeout
+        super().__init__(*args, **kwargs)
+
+    def make_connection(self, host):
+        connection = super().make_connection(host)
+        if self.timeout is not None:
+            connection.timeout = self.timeout
+        return connection
 
 class Client:
     __slots__ = ("ip", "port", "server", "clientID")
@@ -37,8 +50,10 @@ class Client:
 
     def __send_request(self, req: ClientRequest) -> Any:
         json_request = json.dumps(req, cls=RequestEncoder)
-        rpc_function = getattr(self.server, req.func_name)
-        response = json.loads(rpc_function(json_request), cls=ResponseDecoder)
+        # rpc_function = getattr(self.server, req.func_name)
+        # response = json.loads(rpc_function(json_request), cls=ResponseDecoder)
+        proxy = self.server
+        response = json.loads(self.server.execute(json_request), cls=ResponseDecoder)
 
         return response
     
@@ -56,8 +71,13 @@ class Client:
                 response = ClientRequestResponse(1, "failed")
 
                 while response.status != "success":
-                    self.__print_request(request)
-                    response = self.__send_request(request)
+                    try:
+                        self.__print_request(request)
+                        response = self.__send_request(request)
+                    except ConnectionRefusedError:
+                        raise Exception("No connection could be made because the target machine actively refused it")
+                    except Exception as e: 
+                        print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Timeout!\n")
 
                 self.__print_response(response)
         elif command == ExecuteCmd.DEQUEUE:
@@ -75,7 +95,7 @@ class Client:
 
 if __name__ == "__main__":
     print("Starting client")
-    server = ServerProxy(f"http://{sys.argv[1]}:{int(sys.argv[2])}")
+    server = ServerProxy(f"http://{sys.argv[1]}:{int(sys.argv[2])}", transport=TimeoutTransport(timeout=10))
 
     # Trus disini kamu coba bikin handling what if server nya bukan leader
     # Kalo mau bikin method check leader di raft.py boleh aja
@@ -104,6 +124,7 @@ if __name__ == "__main__":
             client.execute(command, param)
             
         except Exception as e: 
-            print(e)
+            print(f"[{client.ip}:{client.port}] [{time.strftime('%H:%M:%S')}] {e}!")
+            break
 
     print(f"[{client.ip}:{client.port}] [{time.strftime('%H:%M:%S')}] Connection ended!\n")

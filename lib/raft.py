@@ -165,6 +165,7 @@ class RaftNode:
         print("Response to Client", response, "\n")
         # TODO : Implement execute
         self.log_replication(request)
+        # time.sleep(11)
 
         return json.dumps(response, cls=ResponseEncoder)
     

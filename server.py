@@ -1,3 +1,7 @@
+# python3 server.py localhost 3000
+
+# python3 server.py localhost 3001 localhost 3000
+
 import sys
 from typing import Optional
 from xmlrpc.server import SimpleXMLRPCServer

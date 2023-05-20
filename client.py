@@ -1,10 +1,12 @@
-# python3 client.py localhost 3000 enqueue(5)
-# python3 client.py localhost 3000 dequeue
+# python3 client.py localhost 3000
+# contoh command: enqueue(5)
+# buat end, command: -1
 # dimana localhost 3000 nya tuh server
 
 import json
 import sys
 import time
+import re
 from enum import Enum
 from typing import Any, Optional
 from xmlrpc.client import ServerProxy
@@ -48,7 +50,7 @@ class Client:
         if command == ExecuteCmd.ENQUEUE:
             if param is not None:
                 contact_addr = Address(self.ip, int(self.port))
-                requestBody = ClientRequestBody(1, f"execute({param})")
+                requestBody = ClientRequestBody(1, param)
                 request = ClientRequest(contact_addr, "execute", requestBody)
                 response = ClientRequestResponse(1, "failed")
 
@@ -71,7 +73,7 @@ class Client:
         
 
 if __name__ == "__main__":
-    print("Starting client\n")
+    print("Starting client")
     server = ServerProxy(f"http://{sys.argv[1]}:{int(sys.argv[2])}")
 
     # Trus disini kamu coba bikin handling what if server nya bukan leader
@@ -80,17 +82,27 @@ if __name__ == "__main__":
     # Nah kalo handling nya dah selesai
     client = Client(sys.argv[1], int(sys.argv[2]), server)
 
-    # Nah kalo udah baru input command dkk. Di wrap pake while true dkk serah kamu
-    try:
-        command = ExecuteCmd.ENQUEUE
-        param = None
-        if (sys.argv[3] == "enqueue") :
+    value = ""
+    patternEnq = r"enqueue\(\d+\)"
+    patternDeq = r"dequeue"
+
+    while (value != "-1"):
+        value= input("\nCommand ('-1' to end connection): ")
+
+        try:
             command = ExecuteCmd.ENQUEUE
-            param = sys.argv[4]
-        elif (sys.argv[3] == "dequeue"):
-            command = ExecuteCmd.DEQUEUE
-        
-        client.execute(command, param)
-        
-    except Exception as e: 
-        print(e)
+            param = None
+            if (re.match(patternEnq, value)) :
+                command = ExecuteCmd.ENQUEUE
+                param = value
+            elif (re.match(patternDeq, value)):
+                command = ExecuteCmd.DEQUEUE
+            elif (value != "-1"):
+                print(f"[{client.ip}:{client.port}] [{time.strftime('%H:%M:%S')}] Wrong command!")
+            
+            client.execute(command, param)
+            
+        except Exception as e: 
+            print(e)
+
+    print(f"[{client.ip}:{client.port}] [{time.strftime('%H:%M:%S')}] Connection ended!\n")

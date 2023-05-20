@@ -33,6 +33,7 @@ class RaftNode:
         self.address:               Address             = addr
         self.cluster_leader_addr:   Optional[Address]   = None
         self.cluster_addr_list:     List[Address]       = []
+        self.time_to_election:      int                 = 0
 
         # Node properties
         self.currentTerm:           int                 = 0
@@ -51,6 +52,17 @@ class RaftNode:
             self.__initialize_as_leader()
         else:
             self.__try_to_apply_membership(contact_addr)
+            self.check_time_to_election = Thread(target=asyncio.run, daemon=True, args=[self.__check_time_to_election()])
+            self.check_time_to_election.start()
+
+    async def __check_time_to_election(self):
+        #TODO: Break diganti dengan leader election
+        while True:
+            curr_time = round(time.time()*1000)
+            if(self.time_to_election != 0 and curr_time - self.time_to_election > 2000):
+                self.__print_log(f"Node {self.address.ip}:{self.address.port} want to be a leader...")
+                break
+            
 
     # Internal Raft Node methods
     def __print_log(self, text: str):
@@ -74,14 +86,66 @@ class RaftNode:
         # TODO : Send periodic heartbeat
         while True:
             self.__print_log("[Leader] Sending heartbeat...")
+            if(len(self.cluster_addr_list) > 0):
+                isExcept = False
+                self.lastApplied += 1
+                self.nextIdx = len(self.log)
+                ack_array = [False] * len(self.cluster_addr_list)
+
+                while sum(bool(x) for x in ack_array) < (len(self.cluster_addr_list) // 2) + 1 and not isExcept:
+                    if (self.nextIdx > 1):
+                        self.nextIdx -= 1
+                        prevLogIdx = self.log[self.nextIdx - 1].idx
+                        prevLogTerm = self.log[self.nextIdx - 1].term
+                    elif (self.nextIdx == 1 or self.nextIdx == 0):
+                        self.nextIdx = 0
+                        prevLogIdx = -1
+                        prevLogTerm = -1
+
+                    entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, prevLogIdx, prevLogTerm, [], self.nextIdx)
+
+                    for i in range(len(self.cluster_addr_list)):
+                        if ack_array[i] == False:
+                            try:
+                                request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
+                                response: AppendEntriesResponse = self.__send_request(request)
+                                if response.success == True:
+                                    ack_array[i] = True
+                                    self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} success...")
+                                else:
+                                    self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} failed...")
+                            except:
+                                self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} died...")
+                                self.__print_log(f"Node {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} will be deleted...")
+                                self.cluster_addr_list.pop(i)
+                                isExcept = True
+            await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
+            '''
             for target in self.cluster_addr_list:
+
                 request = AppendEntriesRequest(target, "heartbeat", self.address)
                 response = AppendEntriesResponse("success", target)
+
+                # kode adel
+                entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, prevLogIdx, prevLogTerm, self.log, self.nextIdx)
+
+                print("Sending log replication request to all nodes...")
+                print("AppendEntriesBody", entries, "\n")
+                
+                for i in range(len(self.cluster_addr_list)):
+                    if ack_array[i] == False:
+                        request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
+                        response: AppendEntriesResponse = self.__send_request(request)
+                        if response.success == True:
+                            self.__print_log(f"Heartbeat to {target.ip}:{target.port} success...")
+                        else:
+                            self.__print_log(f"Heartbeat to {target.ip}:{target.port} failed...")
+
                 if(response.term != "success"):
                     self.__print_log(f"Heartbeat to {target.ip}:{target.port} failed...")
                 else:
                     self.__print_log(f"Heartbeat to {target.ip}:{target.port} success...")
-            await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
+            '''
 
     def __try_to_apply_membership(self, contact_addr: Address):
         redirected_addr = contact_addr
@@ -165,6 +229,7 @@ class RaftNode:
         print("Response to Client", response, "\n")
         # TODO : Implement execute
         self.log_replication(request)
+        print("LOG REPLICATION")
 
         return json.dumps(response, cls=ResponseEncoder)
     
@@ -222,16 +287,20 @@ class RaftNode:
 
     def receiver_replicate_log(self, json_request: str):
         print("Receiver replicate log...")
+        self.time_to_election = round(time.time()*1000)
         request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
         if len(self.log) == 0:
             prevLogIdx = -1
             prevLogTerm = -1
         else:
-            print("Log: ", self.log, "\n")
+            #print("Log: ", self.log, "\n")
             prevLogIdx = self.log[len(self.log) - 1]['idx']
             prevLogTerm = self.log[len(self.log) - 1]['term']
-
-        if (request.body.term == self.currentTerm):
+        print(request.body.term, self.currentTerm)
+        if(request.body.term > self.currentTerm):
+            self.currentTerm = request.body.term
+            self.votedFor = None
+        elif (request.body.term == self.currentTerm):
             if (prevLogIdx == request.body.prevLogIdx and prevLogTerm == request.body.prevLogTerm):
                 print("Request from Leader:\n", request, "\n")
 
@@ -240,7 +309,7 @@ class RaftNode:
                     self.lastApplied += 1
                     if (request.body.entries[i]['result'] == "Committed"):
                         self.commitIdx += 1
-                        
+                         
                 print("Success append log to follower...")
                 print("Follower Log: ", self.log, "\n")
 

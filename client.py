@@ -46,6 +46,7 @@ class Client:
     def __print_response(self, res: ClientRequestResponse):
         if isinstance(res, Response):
             print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) {res.status}!")
+            # print(res.result)
         # Disini kamu bikin class Response di response.py sebagai template response buat method execute n request_log
 
     def __send_request(self, req: ClientRequest) -> Any:
@@ -61,16 +62,16 @@ class Client:
         print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.body.requestNumber}) {res.body.command} sent!")
 
 
-    def execute(self, command: ExecuteCmd, param: Optional[str]):
+    def execute(self, command: ExecuteCmd, param: Optional[str], requestNumber: int):
         # Command yang boleh cuma enqueue(angka) dan dequeue
         if command == ExecuteCmd.ENQUEUE:
             if param is not None:
                 contact_addr = Address(self.ip, int(self.port))
-                requestBody = ClientRequestBody(self.clientID, 1, param)
+                requestBody = ClientRequestBody(self.clientID, requestNumber, param)
                 request = ClientRequest(contact_addr, "execute", requestBody)
-                response = ClientRequestResponse(1, "failed")
+                response = ClientRequestResponse(requestNumber, "failed", None)
 
-                while response.status != "success":
+                while response.status != "success" and requestNumber == response.requestNumber:
                     try:
                         self.__print_request(request)
                         response = self.__send_request(request)
@@ -95,7 +96,7 @@ class Client:
 
 if __name__ == "__main__":
     print("Starting client")
-    server = ServerProxy(f"http://{sys.argv[1]}:{int(sys.argv[2])}", transport=TimeoutTransport(timeout=10))
+    server = ServerProxy(f"http://{sys.argv[1]}:{int(sys.argv[2])}", transport=TimeoutTransport(timeout=30))
 
     # Trus disini kamu coba bikin handling what if server nya bukan leader
     # Kalo mau bikin method check leader di raft.py boleh aja
@@ -107,6 +108,8 @@ if __name__ == "__main__":
     patternEnq = r"enqueue\(\d+\)"
     patternDeq = r"dequeue"
 
+    requestNumber = 0
+
     while (value != "-1"):
         value= input("\nCommand ('-1' to end connection): ")
 
@@ -116,12 +119,14 @@ if __name__ == "__main__":
             if (re.match(patternEnq, value)) :
                 command = ExecuteCmd.ENQUEUE
                 param = value
+                requestNumber += 1
             elif (re.match(patternDeq, value)):
                 command = ExecuteCmd.DEQUEUE
+                requestNumber += 1
             elif (value != "-1"):
                 print(f"[{client.ip}:{client.port}] [{time.strftime('%H:%M:%S')}] Wrong command!")
             
-            client.execute(command, param)
+            client.execute(command, param, requestNumber)
             
         except Exception as e: 
             print(f"[{client.ip}:{client.port}] [{time.strftime('%H:%M:%S')}] {e}!")

@@ -161,7 +161,7 @@ class RaftNode:
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
         print("Request from Client\n", request, "\n")
         
-        response = ClientRequestResponse(request.body.requestNumber, "success")
+        response = ClientRequestResponse(request.body.requestNumber, "success", "result")
         print("Response to Client", response, "\n")
         # TODO : Implement execute
         self.log_replication(request)

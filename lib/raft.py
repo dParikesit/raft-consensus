@@ -4,14 +4,19 @@ import socket
 import time
 from enum import Enum
 from threading import Thread
-from typing import Any, List, Optional, Tuple
+from typing import AbstractSet, Any, List, MutableSet, Optional, Tuple
 from xmlrpc.client import ServerProxy
 
 from lib.struct.address import Address
-from lib.struct.request.body import AppendEntriesBody
-from lib.struct.response.response import ResponseEncoder, ResponseDecoder, Response, MembershipResponse, ClientRequestResponse, AppendEntriesResponse
-from lib.struct.request.request import ClientRequest, Request, RequestEncoder, RequestDecoder, StringRequest, AddressRequest, AppendEntriesRequest
 from lib.struct.logEntry import LogEntry
+from lib.struct.request.body import AppendEntriesBody, RequestVoteBody
+from lib.struct.request.request import (AddressRequest, AppendEntriesRequest,
+                                        ClientRequest, Request, RequestDecoder,
+                                        RequestEncoder, StringRequest, RequestVoteRequest)
+from lib.struct.response.response import (AppendEntriesResponse,
+                                          ClientRequestResponse,
+                                          MembershipResponse, Response,
+                                          ResponseDecoder, ResponseEncoder, RequestVoteResponse)
 
 
 class RaftNode:
@@ -36,7 +41,7 @@ class RaftNode:
 
         # Node properties
         self.currentTerm:           int                 = 0
-        self.votedFor:              Optional[int]       = None
+        self.votedFor:              Optional[Address]   = None
         self.log:                   List[LogEntry]      = [] # First idx is 0
         self.commitIdx:             int                 = -1
         self.lastApplied:           int                 = -1
@@ -154,6 +159,52 @@ class RaftNode:
             thr.start()
         response = MembershipResponse("success", self.address, self.log, self.cluster_addr_list)
         print(response)
+        return json.dumps(response, cls=ResponseEncoder)
+
+    async def election_start(self):
+        if self.cluster_leader_addr:
+            self.cluster_addr_list.append(self.cluster_leader_addr)
+            self.cluster_leader_addr = None
+        self.type = RaftNode.NodeType.CANDIDATE
+        self.currentTerm += 1
+        voteCount: int = 1
+        tasks = []
+        for addr in self.cluster_addr_list:
+            if addr != self.address:
+                request = RequestVoteRequest(addr, "election_vote", RequestVoteBody(self.currentTerm, self.address, len(self.log)+1, self.log[-1].term))
+                task = asyncio.ensure_future(self.__send_request_async(request))
+                tasks.append(task)
+        responses: List[RequestVoteResponse] = await asyncio.gather(*tasks)
+        for response in responses:
+            if response.voteGranted:
+                voteCount += 1
+        
+        if voteCount > ((len(self.log)//2) + 1):
+            self.type = RaftNode.NodeType.LEADER
+            self.cluster_leader_addr = self.address
+            self.cluster_addr_list.remove(self.address)
+    
+    def election_vote(self, json_request: str) -> str:
+        request: RequestVoteRequest = json.loads(json_request, cls=RequestDecoder)
+        response = RequestVoteResponse(self.currentTerm, False)
+
+        if self.votedFor == None or self.votedFor == request.body.candidateId:
+            response.voteGranted = True
+        else:
+            return json.dumps(response, cls=ResponseEncoder)
+
+        if request.body.lastLogTerm >= self.log[-1].term and request.body.lastLogIdx >= len(self.log) + 1:
+            response.voteGranted = True
+        else:
+            return json.dumps(response, cls=ResponseEncoder)
+
+        if self.currentTerm <= request.body.term:
+            self.currentTerm = request.body.term
+            response.voteGranted = True
+        else:
+            return json.dumps(response, cls=ResponseEncoder)
+            
+        self.votedFor = request.body.candidateId
         return json.dumps(response, cls=ResponseEncoder)
 
     # Client RPCs

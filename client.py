@@ -14,7 +14,7 @@ import socket
 import xmlrpc.client
 
 from lib.struct.request.request import Request, RequestEncoder, ClientRequest
-from lib.struct.response.response import Response, ResponseDecoder, ClientRequestResponse
+from lib.struct.response.response import Response, ResponseDecoder, ClientRequestResponse, ClientRiderectResponse
 from lib.struct.request.body import ClientRequestBody
 from lib.struct.address import Address
 
@@ -43,10 +43,13 @@ class Client:
         self.server = server
         self.clientID = clientID
     
-    def __print_response(self, res: ClientRequestResponse):
-        if isinstance(res, Response):
+    def __print_response(self, res: Response):
+        if isinstance(res, ClientRequestResponse):
             print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) {res.status}!")
             # print(res.result)
+        
+        if isinstance(res, ClientRiderectResponse):
+            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request redirected to [{self.ip}:{self.port}]!")
         # Disini kamu bikin class Response di response.py sebagai template response buat method execute n request_log
 
     def __send_request(self, req: ClientRequest) -> Any:
@@ -75,8 +78,20 @@ class Client:
                     try:
                         self.__print_request(request)
                         response = self.__send_request(request)
+                        
+                        if(response.status == "Redirect"):
+                            self.__print_response(response)
+                            self.ip = response.address["ip"]
+                            self.port = response.address["port"]
+                            self.server = ServerProxy(f"http://{self.ip}:{self.port}", transport=TimeoutTransport(timeout=100))
+                            
+                            contact_addr = Address(self.ip, int(self.port))
+                            request = ClientRequest(contact_addr, "execute", requestBody)
+                            response = ClientRequestResponse(requestNumber, "failed", None)
+                            
                     except ConnectionRefusedError:
                         raise Exception("No connection could be made because the target machine actively refused it")
+                    
                     except Exception as e: 
                         print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Timeout!\n")
 
@@ -96,7 +111,7 @@ class Client:
 
 if __name__ == "__main__":
     print("Starting client")
-    server = ServerProxy(f"http://{sys.argv[1]}:{int(sys.argv[2])}", transport=TimeoutTransport(timeout=30))
+    server = ServerProxy(f"http://{sys.argv[1]}:{int(sys.argv[2])}", transport=TimeoutTransport(timeout=100))
 
     # Trus disini kamu coba bikin handling what if server nya bukan leader
     # Kalo mau bikin method check leader di raft.py boleh aja

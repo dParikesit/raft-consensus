@@ -48,6 +48,12 @@ class ResponseEncoder(JSONEncoder):
                 "status": o.status,
                 "result": o.result
             }
+        if isinstance(o, ClientRiderectResponse):
+            return{
+                "type"  : o.type,
+                "status": o.status,
+                "address"  : o.address
+            }
         if isinstance(o, Response):
             return {"type": o.type}
         return super().default(o)
@@ -66,6 +72,8 @@ class ResponseDecoder(JSONDecoder):
                 return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]), [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]], obj["cluster_addr_list"])
             if obj["type"] == 'ClientRequestResponse':
                 return ClientRequestResponse(obj["requestNumber"], obj["status"], obj["result"])
+            if obj["type"] == 'ClientRiderectResponse':
+                return ClientRiderectResponse(obj["status"], obj["address"])
         return obj
 
 class Response:
@@ -114,3 +122,11 @@ class ClientRequestResponse(Response):
         self.requestNumber: int     = requestNumber
         self.status:   str          = status
         self.result:        str     = result
+
+class ClientRiderectResponse(Response):
+    __slots__ = ('status', 'address')
+
+    def __init__(self, status: str, address: Address) -> None:
+        super().__init__("ClientRiderectResponse")
+        self.status:    str         = status
+        self.address:   Address     = address

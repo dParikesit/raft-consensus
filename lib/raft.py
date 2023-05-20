@@ -169,6 +169,7 @@ class RaftNode:
         self.currentTerm += 1
         voteCount: int = 1
         tasks = []
+
         for addr in self.cluster_addr_list:
             if addr != self.address:
                 request = RequestVoteRequest(addr, "election_vote", RequestVoteBody(self.currentTerm, self.address, len(self.log)+1, self.log[-1].term))
@@ -178,6 +179,10 @@ class RaftNode:
         for response in responses:
             if response.voteGranted:
                 voteCount += 1
+            else:
+                if response.term > self.currentTerm:
+                    self.type = RaftNode.NodeType.FOLLOWER # Bukan paling update
+                    return
         
         if voteCount > ((len(self.log)//2) + 1):
             self.type = RaftNode.NodeType.LEADER
@@ -200,6 +205,7 @@ class RaftNode:
 
         if self.currentTerm <= request.body.term:
             self.currentTerm = request.body.term
+            response.term = self.currentTerm
             response.voteGranted = True
         else:
             return json.dumps(response, cls=ResponseEncoder)

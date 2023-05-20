@@ -38,8 +38,8 @@ class RaftNode:
         self.currentTerm:           int                 = 0
         self.votedFor:              Optional[int]       = None
         self.log:                   List[LogEntry]      = [] # First idx is 0
-        self.commitIdx:             int                 = 0
-        self.lastApplied:           int                 = 0
+        self.commitIdx:             int                 = -1
+        self.lastApplied:           int                 = -1
         
         # Leader properties (Not None if leader, else None)
         self.nextIdx:               Optional[List[int]] = None
@@ -171,39 +171,97 @@ class RaftNode:
     def log_replication(self, cliReq: ClientRequest):
         print("Log Replication")
 
-        log_entry = LogEntry(self.currentTerm, self.commitIdx, cliReq.dest, 
+        log_entry = LogEntry(self.currentTerm, self.commitIdx + 1, cliReq.dest, 
                              cliReq.body.command, cliReq.body.requestNumber, None)
         self.log.append(log_entry)
 
-        entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, self.commitIdx, 
-                                                       self.lastApplied, self.log, self.commitIdx)
+        self.lastApplied += 1
+        self.nextIdx = len(self.log)
 
-        print("Sending log replication request to all nodes...")
-        print("AppendEntriesBody", entries, "\n")
+        if (len(self.cluster_addr_list) > 0):
+            ack_array = [False] * len(self.cluster_addr_list)
 
-        ack_array = [False] * len(self.cluster_addr_list)
+            while sum(bool(x) for x in ack_array) < (len(self.cluster_addr_list) // 2) + 1:
+                if (self.nextIdx > 1):
+                    self.nextIdx -= 1
+                    prevLogIdx = self.log[self.nextIdx - 1].idx
+                    prevLogTerm = self.log[self.nextIdx - 1].term
+                elif (self.nextIdx == 1 or self.nextIdx == 0):
+                    self.nextIdx = 0
+                    prevLogIdx = -1
+                    prevLogTerm = -1
 
-        while sum(bool(x) for x in ack_array) < (len(self.cluster_addr_list) // 2) + 1:
+                entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, prevLogIdx, 
+                                                            prevLogTerm, self.log, self.nextIdx)
+
+                print("Sending log replication request to all nodes...")
+                print("AppendEntriesBody", entries, "\n")
+                
+                for i in range(len(self.cluster_addr_list)):
+                    if ack_array[i] == False:
+                        request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
+                        response: AppendEntriesResponse = self.__send_request(request)
+                        if response.success == True:
+                            ack_array[i] = True
+
+            print("Log replication success...")
+            print("Committing log...")
+            self.log[len(self.log) - 1].result = "Committed"
+            self.commitIdx += 1
+            
+            print("Leader Log: ", self.log, "\n")
+            print("Sending response to client...")
+
+            entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, None, None, self.log, self.commitIdx)
+
             for i in range(len(self.cluster_addr_list)):
-                if ack_array[i] == False:
-                    request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
+                if ack_array[i] == True:
+                    request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_commit_log", entries)
                     response: AppendEntriesResponse = self.__send_request(request)
-                    if response.success == True:
-                        ack_array[i] = True
-
-        print("Log replication success...")
-        print("Committing log...")
-        self.log[len(self.log) - 1].result = "Committed"
-        print("Leader Log: ", self.log, "\n")
 
 
     def receiver_replicate_log(self, json_request: str):
+        print("Receiver replicate log...")
         request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
-        print("Request from Leader:\n", request, "\n")
+        if len(self.log) == 0:
+            prevLogIdx = -1
+            prevLogTerm = -1
+        else:
+            print("Log: ", self.log, "\n")
+            prevLogIdx = self.log[len(self.log) - 1]['idx']
+            prevLogTerm = self.log[len(self.log) - 1]['term']
 
-        self.log.append(request.body.entries[len(request.body.entries) - 1])
-        print("Success append log to follower...")
+        if (request.body.term == self.currentTerm):
+            if (prevLogIdx == request.body.prevLogIdx and prevLogTerm == request.body.prevLogTerm):
+                print("Request from Leader:\n", request, "\n")
+
+                for i in range(request.body.leaderCommit, len(request.body.entries)):
+                    self.log.append(request.body.entries[i])
+                    self.lastApplied += 1
+                    if (request.body.entries[i]['result'] == "Committed"):
+                        self.commitIdx += 1
+                        
+                print("Success append log to follower...")
+                print("Follower Log: ", self.log, "\n")
+
+                response = AppendEntriesResponse(self.currentTerm, True)
+                return json.dumps(response, cls=ResponseEncoder)
+            else:
+                response = AppendEntriesResponse(self.currentTerm, False)
+                return json.dumps(response, cls=ResponseEncoder)
+        else:
+            response = AppendEntriesResponse(self.currentTerm, False)
+            return json.dumps(response, cls=ResponseEncoder)
+    
+    def receiver_commit_log(self, json_request: str):
+        print("Receiver commit log...")
+        request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
+
+        self.log[request.body.leaderCommit]['result'] = "Committed"
+        self.commitIdx = request.body.leaderCommit
+
+        print("Committing log...")
         print("Follower Log: ", self.log, "\n")
-        response = AppendEntriesResponse(self.currentTerm, True)
 
+        response = AppendEntriesResponse(self.currentTerm, True)
         return json.dumps(response, cls=ResponseEncoder)

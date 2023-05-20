@@ -1,6 +1,7 @@
 from typing import List, Tuple
 
 from lib.struct.logEntry import LogEntry
+from lib.struct.address import Address
 
 class AppendEntriesBody():
     __slots__ = ('term', 'leaderId', 'prevLogIdx', 'prevLogTerm', 'entries', 'leaderCommit')
@@ -19,9 +20,9 @@ class AppendEntriesBody():
 class RequestVoteBody:
     __slots__ = ('term', 'candidateId', 'lastLogIdx', 'lastLogTerm')
 
-    def __init__(self, term: int, candidateId: int, lastLogIdx: int, lastLogTerm: int) -> None:
+    def __init__(self, term: int, candidateId: Address, lastLogIdx: int, lastLogTerm: int) -> None:
         self.term: int = term
-        self.candidateId: int = candidateId
+        self.candidateId: Address = candidateId
         self.lastLogIdx: int = lastLogIdx
         self.lastLogTerm: int = lastLogTerm
 

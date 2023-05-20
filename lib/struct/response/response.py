@@ -45,7 +45,8 @@ class ResponseEncoder(JSONEncoder):
             return {
                 "type": o.type,
                 "requestNumber": o.requestNumber,
-                "status": o.status
+                "status": o.status,
+                "result": o.result
             }
         if isinstance(o, Response):
             return {"type": o.type}
@@ -64,7 +65,7 @@ class ResponseDecoder(JSONDecoder):
             if obj["type"] == 'MembershipResponse':
                 return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]), [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]], obj["cluster_addr_list"])
             if obj["type"] == 'ClientRequestResponse':
-                return ClientRequestResponse(obj["requestNumber"], obj["status"])
+                return ClientRequestResponse(obj["requestNumber"], obj["status"], obj["result"])
         return obj
 
 class Response:
@@ -106,9 +107,10 @@ class RequestVoteResponse(Response):
         self.voteGranted:   bool    = voteGranted
 
 class ClientRequestResponse(Response):
-    __slots__ = ('requestNumber', 'status')
+    __slots__ = ('requestNumber', 'status', 'result')
 
-    def __init__(self, requestNumber: int, status: str) -> None:
+    def __init__(self, requestNumber: int, status: str, result: str) -> None:
         super().__init__("ClientRequestResponse")
         self.requestNumber: int     = requestNumber
         self.status:   str          = status
+        self.result:        str     = result

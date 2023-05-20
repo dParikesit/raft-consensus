@@ -40,6 +40,7 @@ class RequestEncoder(JSONEncoder):
             }
         if isinstance(o, ClientRequestBody):
             return{
+                "clientID": o.clientID,
                 "requestNumber": o.requestNumber,
                 "command": o.command
             }
@@ -67,7 +68,7 @@ class RequestDecoder(JSONDecoder):
             if obj["type"] == 'AddressRequest':
                 return AddressRequest(obj["dest"], obj["func_name"], Address(obj["body"]["ip"], obj["body"]["port"]))
             if obj["type"] == 'ClientRequest':
-                return ClientRequest(obj["dest"], obj["func_name"], ClientRequestBody(obj["body"]["requestNumber"], obj["body"]["command"]))
+                return ClientRequest(obj["dest"], obj["func_name"], ClientRequestBody(obj["body"]["clientID"], obj["body"]["requestNumber"], obj["body"]["command"]))
         return obj
 
 class Request:

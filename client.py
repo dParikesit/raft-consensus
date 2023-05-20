@@ -1,4 +1,4 @@
-# python3 client.py localhost 3000
+# python3 client.py localhost 3000 clientID
 # contoh command: enqueue(5)
 # buat end, command: -1
 # dimana localhost 3000 nya tuh server
@@ -22,16 +22,17 @@ class ExecuteCmd(Enum):
     DEQUEUE = 2
 
 class Client:
-    __slots__ = ("ip", "port", "server")
+    __slots__ = ("ip", "port", "server", "clientID")
 
-    def __init__(self, ip: str, port: int, server: ServerProxy) -> None:
+    def __init__(self, ip: str, port: int, server: ServerProxy, clientID: str) -> None:
         self.ip = ip
         self.port = port
         self.server = server
+        self.clientID = clientID
     
     def __print_response(self, res: ClientRequestResponse):
         if isinstance(res, Response):
-            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] Request ({res.requestNumber}) {res.status}!")
+            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) {res.status}!")
         # Disini kamu bikin class Response di response.py sebagai template response buat method execute n request_log
 
     def __send_request(self, req: ClientRequest) -> Any:
@@ -42,7 +43,7 @@ class Client:
         return response
     
     def __print_request(self, res: ClientRequest):
-        print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] Request ({res.body.requestNumber}) {res.body.command} sent!")
+        print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.body.requestNumber}) {res.body.command} sent!")
 
 
     def execute(self, command: ExecuteCmd, param: Optional[str]):
@@ -50,7 +51,7 @@ class Client:
         if command == ExecuteCmd.ENQUEUE:
             if param is not None:
                 contact_addr = Address(self.ip, int(self.port))
-                requestBody = ClientRequestBody(1, param)
+                requestBody = ClientRequestBody(self.clientID, 1, param)
                 request = ClientRequest(contact_addr, "execute", requestBody)
                 response = ClientRequestResponse(1, "failed")
 
@@ -80,7 +81,7 @@ if __name__ == "__main__":
     # Kalo mau bikin method check leader di raft.py boleh aja
     
     # Nah kalo handling nya dah selesai
-    client = Client(sys.argv[1], int(sys.argv[2]), server)
+    client = Client(sys.argv[1], int(sys.argv[2]), server, sys.argv[3])
 
     value = ""
     patternEnq = r"enqueue\(\d+\)"

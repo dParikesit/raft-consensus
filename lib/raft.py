@@ -380,7 +380,8 @@ class RaftNode:
 
             print("Log replication success...")
             print("Committing log...")
-            self.log[len(self.log) - 1].result = "Committed"
+            
+            self.update_commit_log()
             self.commitIdx += 1
             
             print("Leader Log: ", self.log, "\n")
@@ -396,7 +397,7 @@ class RaftNode:
         else:
             print("Log replication success...")
             print("Committing log...")
-            self.log[len(self.log) - 1].result = "Committed"
+            self.update_commit_log()
             print("Leader Log: ", self.log, "\n")
 
 
@@ -445,7 +446,24 @@ class RaftNode:
         self.commitIdx = request.body.leaderCommit
 
         print("Committing log...")
+        self.update_commit_log()
         print("Follower Log: ", self.log, "\n")
 
         response = AppendEntriesResponse(self.currentTerm, True)
         return json.dumps(response, cls=ResponseEncoder)
+
+    def update_commit_log(self):
+        results = []
+        for i in range(len(self.log) - 1):
+            if self.log[i].operation == "dequeue":
+                if (len(results) > 0):
+                    results.pop(0)
+            else:
+                results.append(self.log[i].operation[8:-1])
+        if (self.log[len(self.log) - 1].operation == "dequeue"):
+            if len(results) > 0:
+                self.log[len(self.log) -1].result = results[0]
+            else:  
+                self.log[len(self.log) -1].result = "-1"
+        else:
+            self.log[len(self.log) -1].result = len(results) + 1

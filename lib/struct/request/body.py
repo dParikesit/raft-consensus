@@ -16,7 +16,22 @@ class AppendEntriesBody():
 
     def __str__(self):
         return f"AppendEntriesBody(term={self.term}, leaderId={self.leaderId}, prevLogIdx={self.prevLogIdx}, prevLogTerm={self.prevLogTerm}, entries={self.entries}, leaderCommit={self.leaderCommit})"
-    
+
+class AppendEntriesMembershipBody:
+    __slots__ = ('term', 'leaderId', 'prevLogIdx', 'prevLogTerm', 'entries', 'leaderCommit', 'cluster_addr_list')
+
+    def __init__(self, term: int, leaderId: int, prevLogIdx: int, prevLogTerm: int, entries: List[LogEntry], leaderCommit: int, cluster_addr_list: list) -> None:
+        self.term: int = term
+        self.leaderId: int = leaderId
+        self.prevLogIdx: int = prevLogIdx
+        self.prevLogTerm: int = prevLogTerm
+        self.entries: List[LogEntry] = entries
+        self.leaderCommit: int = leaderCommit
+        self.cluster_addr_list: list = cluster_addr_list
+
+    def __str__(self):
+        return f"AppendEntriesMembershipBody(term={self.term}, leaderId={self.leaderId}, prevLogIdx={self.prevLogIdx}, prevLogTerm={self.prevLogTerm}, entries={self.entries}, leaderCommit={self.leaderCommit}, cluster_addr_list={self.cluster_addr_list})"
+
 class RequestVoteBody:
     __slots__ = ('term', 'candidateId', 'lastLogIdx', 'lastLogTerm')
 

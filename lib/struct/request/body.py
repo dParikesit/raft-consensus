@@ -3,7 +3,7 @@ from typing import List, Tuple
 from lib.struct.logEntry import LogEntry
 from lib.struct.address import Address
 
-class AppendEntriesBody():
+class AppendEntriesBody:
     __slots__ = ('term', 'leaderId', 'prevLogIdx', 'prevLogTerm', 'entries', 'leaderCommit')
 
     def __init__(self, term: int, leaderId: Address, prevLogIdx: int, prevLogTerm: int, entries: List[LogEntry], leaderCommit: int) -> None:

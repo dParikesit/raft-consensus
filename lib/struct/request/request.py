@@ -3,7 +3,8 @@ from typing import Any, List, Tuple
 
 from lib.struct.address import Address
 from lib.struct.logEntry import LogEntry
-from lib.struct.request.body import AppendEntriesBody, RequestVoteBody, ClientRequestBody
+from lib.struct.request.body import (AppendEntriesBody, RequestVoteBody, 
+                                     ClientRequestBody, AppendEntriesMembershipBody)
 
 
 class RequestEncoder(JSONEncoder):
@@ -30,6 +31,16 @@ class RequestEncoder(JSONEncoder):
                 "prevLogTerm": o.prevLogTerm,
                 "entries": o.entries,
                 "leaderCommit": o.leaderCommit
+            }
+        if isinstance(o, AppendEntriesMembershipBody):
+            return{
+                "term": o.term,
+                "leaderId": o.leaderId,
+                "prevLogIdx": o.prevLogIdx,
+                "prevLogTerm": o.prevLogTerm,
+                "entries": o.entries,
+                "leaderCommit": o.leaderCommit,
+                "cluster_addr_list": o.cluster_addr_list
             }
         if isinstance(o, RequestVoteBody):
             return {
@@ -61,6 +72,20 @@ class RequestDecoder(JSONDecoder):
         if isinstance(obj, dict) and "type" in obj:
             if obj["type"] == 'AppendEntriesRequest':
                 return AppendEntriesRequest(obj["dest"], obj["func_name"], AppendEntriesBody(obj["body"]["term"], obj["body"]["leaderId"], obj["body"]["prevLogIdx"], obj["body"]["prevLogTerm"], [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["body"]["entries"]], obj["body"]["leaderCommit"]))
+            if obj["type"] == 'AppendEntriesMembershipRequest':
+                return AppendEntriesMembershipRequest(
+                    obj["dest"],
+                    obj["func_name"], 
+                    AppendEntriesMembershipBody(
+                        obj["body"]["term"], 
+                        obj["body"]["leaderId"], 
+                        obj["body"]["prevLogIdx"], 
+                        obj["body"]["prevLogTerm"], 
+                        obj["body"]["entries"], 
+                        obj["body"]["leaderCommit"],
+                        obj["body"]["cluster_addr_list"]
+                    ),
+                )
             if obj["type"] == 'RequestVoteRequest':
                 return RequestVoteRequest(obj["dest"], obj["func_name"], RequestVoteBody(obj["body"]["term"], obj["body"]["candidateId"], obj["body"]["lastLogIdx"], obj["body"]["lastLogTerm"]))
             if obj["type"] == 'StringRequest':
@@ -99,6 +124,11 @@ class AppendEntriesRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: AppendEntriesBody) -> None:
         super().__init__("AppendEntriesRequest", dest, func_name)
         self.body: AppendEntriesBody = body
+
+class AppendEntriesMembershipRequest(Request):
+    def __init__(self, dest: Address, func_name: str, body: AppendEntriesMembershipBody) -> None:
+        super().__init__("AppendEntriesMembershipRequest", dest, func_name)
+        self.body: AppendEntriesMembershipBody = body
 
 class RequestVoteRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: RequestVoteBody) -> None:

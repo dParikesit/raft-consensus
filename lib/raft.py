@@ -757,7 +757,6 @@ class RaftNode:
         print("Receiver commit log...")
         request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
 
-        self.log[request.body.leaderCommit].result = "Committed"
         self.commitIdx = request.body.leaderCommit
 
         print("Committing log...")

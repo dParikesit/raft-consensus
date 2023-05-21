@@ -409,6 +409,7 @@ class RaftNode:
             print("Log replication success...")
             print("Committing log...")
             self.update_commit_log()
+            self.commitIdx += 1
             print("Leader Log: ", self.log, "\n")
 
 
@@ -435,7 +436,7 @@ class RaftNode:
                 for i in range(request.body.leaderCommit, len(request.body.entries)):
                     self.log.append(request.body.entries[i])
                     self.lastApplied += 1
-                    if (request.body.entries[i].result == "Committed"):
+                    if (request.body.entries[i].result != None):
                         self.commitIdx += 1
                          
                 print("Success append log to follower...")

@@ -50,6 +50,7 @@ class RaftNode:
         # Leader properties (Not None if leader, else None)
         self.nextIdx:               Optional[List[int]] = None
         self.matchIdx:              Optional[List[int]] = None
+        self.nodeData:              Optional[dict[Address]] = {}
 
         self.__print_log("Server Start Time")
         if contact_addr is None:
@@ -93,33 +94,31 @@ class RaftNode:
             self.__print_log("[Leader] Sending heartbeat...")
             if(len(self.cluster_addr_list) > 0):
                 for i in range(len(self.cluster_addr_list)):
-                    self.lastApplied += 1
-                    self.nextIdx = len(self.log)
-                    ack_array = [False] * len(self.cluster_addr_list)
-
+                    '''if(self.nextIdx == None):
+                        self.nextIdx = 0
                     if (self.nextIdx > 1):
-                        self.nextIdx -= 1
+                        # self.nextIdx -= 1
                         prevLogIdx = self.log[self.nextIdx - 1].idx
                         prevLogTerm = self.log[self.nextIdx - 1].term
                     elif (self.nextIdx == 1 or self.nextIdx == 0):
                         self.nextIdx = 0
                         prevLogIdx = -1
-                        prevLogTerm = -1
+                        prevLogTerm = -1'''
+                    if(self.cluster_addr_list[i].port not in self.nodeData):
+                        self.nodeData[self.cluster_addr_list[i].port] = [0, -1, -1]
+                    entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, self.nodeData[self.cluster_addr_list[i].port][1], self.nodeData[self.cluster_addr_list[i].port][2], [], self.nodeData[self.cluster_addr_list[i].port][0])
+                    try:
+                        request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
+                        response: AppendEntriesResponse = self.__send_request(request)
+                        if response.success == True:
+                            self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} success...")
+                        else:
+                            self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} failed...")
+                    except:
+                        self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} died...")
+                        self.__print_log(f"Node {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} will be deleted...")
+                        self.cluster_addr_list.pop(i)
 
-                    entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, prevLogIdx, prevLogTerm, [], self.nextIdx)
-                    if ack_array[i] == False:
-                        try:
-                            request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
-                            response: AppendEntriesResponse = self.__send_request(request)
-                            if response.success == True:
-                                ack_array[i] = True
-                                self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} success...")
-                            else:
-                                self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} failed...")
-                        except:
-                            self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} died...")
-                            self.__print_log(f"Node {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} will be deleted...")
-                            self.cluster_addr_list.pop(i)
 
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
             '''
@@ -327,6 +326,9 @@ class RaftNode:
                         response: AppendEntriesResponse = self.__send_request(request)
                         if response.success == True:
                             ack_array[i] = True
+                            self.nodeData[self.cluster_addr_list[i].port] = [self.nextIdx, prevLogIdx, prevLogTerm]
+                            
+
 
             print("Log replication success...")
             print("Committing log...")
@@ -355,7 +357,7 @@ class RaftNode:
             #print("Log: ", self.log, "\n")
             prevLogIdx = self.log[len(self.log) - 1]['idx']
             prevLogTerm = self.log[len(self.log) - 1]['term']
-        print(request.body.term, self.currentTerm)
+
         if(request.body.term > self.currentTerm):
             self.currentTerm = request.body.term
             self.votedFor = None

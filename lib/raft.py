@@ -63,7 +63,8 @@ class RaftNode:
         self.lastApplied:           int                 = -1
 
         # Leader properties (Not None if leader, else None)
-        self.nextIdx:               Optional[List[int]] = None
+        # self.nextIdx:               Optional[List[int]] = None
+        self.nextIdx:               Optional[dict[int]] = {'port': None, 'prevLogIdx': None, 'prevLogTerm': None}
         self.matchIdx:              Optional[List[int]] = None
         self.nodeData:              Optional[dict[Address]] = {}
 
@@ -102,16 +103,16 @@ class RaftNode:
             self.__print_log("[Leader] Sending heartbeat...")
             if(len(self.cluster_addr_list) > 0):
                 for i in range(len(self.cluster_addr_list)):
-                    '''if(self.nextIdx == None):
-                        self.nextIdx = 0
-                    if (self.nextIdx > 1):
-                        # self.nextIdx -= 1
-                        prevLogIdx = self.log[self.nextIdx - 1].idx
-                        prevLogTerm = self.log[self.nextIdx - 1].term
-                    elif (self.nextIdx == 1 or self.nextIdx == 0):
-                        self.nextIdx = 0
-                        prevLogIdx = -1
-                        prevLogTerm = -1'''
+                    '''if(self.nextIdx['port'] == None):
+                        self.nextIdx['port'] = 0
+                    if (self.nextIdx['port'] > 1):
+                        # self.nextIdx['port'] -= 1
+                        self.nextIdx['prevLogIdx'] = self.log[self.nextIdx['port'] - 1].idx
+                        self.nextIdx['prevLogTerm'] = self.log[self.nextIdx['port'] - 1].term
+                    elif (self.nextIdx['port'] == 1 or self.nextIdx['port'] == 0):
+                        self.nextIdx['port'] = 0
+                        self.nextIdx['prevLogIdx'] = -1
+                        self.nextIdx['prevLogTerm'] = -1'''
                     if(self.cluster_addr_list[i].port not in self.nodeData):
                         self.nodeData[self.cluster_addr_list[i].port] = [0, -1, -1]
                     entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, self.nodeData[self.cluster_addr_list[i].port][1], self.nodeData[self.cluster_addr_list[i].port][2], [], self.nodeData[self.cluster_addr_list[i].port][0])
@@ -137,7 +138,7 @@ class RaftNode:
                 response = AppendEntriesResponse("success", target)
 
                 # kode adel
-                entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, prevLogIdx, prevLogTerm, self.log, self.nextIdx)
+                entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, self.nextIdx['prevLogIdx'], self.nextIdx['prevLogTerm'], self.log, self.nextIdx)
 
                 print("Sending log replication request to all nodes...")
                 print("AppendEntriesBody", entries, "\n")
@@ -209,8 +210,8 @@ class RaftNode:
         '''response = {
             "term": self.currentTerm + 1,
             "leaderId": self.cluster_leader_addr,
-            "prevLogIdx": self.nodeData[self.cluster_leader_addr.port][1],
-            "prevLogTerm": self.nodeData[self.cluster_leader_addr.port][2],
+            "self.nextIdx['prevLogIdx']": self.nodeData[self.cluster_leader_addr.port][1],
+            "self.nextIdx['prevLogTerm']": self.nodeData[self.cluster_leader_addr.port][2],
             "entries": [],
             "leaderCommit": self.nodeData[self.cluster_leader_addr.port][0],
 
@@ -357,23 +358,24 @@ class RaftNode:
         self.log.append(log_entry)
 
         self.lastApplied += 1
-        self.nextIdx = len(self.log)
+        # self.nextIdx['port'] = len(self.log)
+        self.nextIdx['port'] = len(self.log)
 
         if (len(self.cluster_addr_list) > 0):
             ack_array = [False] * len(self.cluster_addr_list)
 
             while sum(bool(x) for x in ack_array) < (len(self.cluster_addr_list) // 2) + 1:
-                if (self.nextIdx > 1):
-                    self.nextIdx -= 1
-                    prevLogIdx = self.log[self.nextIdx - 1].idx
-                    prevLogTerm = self.log[self.nextIdx - 1].term
-                elif (self.nextIdx == 1 or self.nextIdx == 0):
-                    self.nextIdx = 0
-                    prevLogIdx = -1
-                    prevLogTerm = -1
+                if (self.nextIdx['port'] > 1):
+                    self.nextIdx['port'] -= 1
+                    self.nextIdx['prevLogIdx'] = self.log[self.nextIdx['port'] - 1].idx
+                    self.nextIdx['prevLogTerm'] = self.log[self.nextIdx['port'] - 1].term
+                elif (self.nextIdx['port'] == 1 or self.nextIdx['port'] == 0):
+                    self.nextIdx['port'] = 0
+                    self.nextIdx['prevLogIdx'] = -1
+                    self.nextIdx['prevLogTerm'] = -1
 
-                entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, self.address, prevLogIdx, 
-                                                            prevLogTerm, self.log, self.nextIdx)
+                entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, self.address, self.nextIdx['prevLogIdx'], 
+                                                            self.nextIdx['prevLogTerm'], self.log, self.nextIdx['port'])
 
                 print("Sending log replication request to all nodes...")
                 print("AppendEntriesBody", entries, "\n")
@@ -384,7 +386,7 @@ class RaftNode:
                         response: AppendEntriesResponse = self.__send_request(request)
                         if response.success == True:
                             ack_array[i] = True
-                            self.nodeData[self.cluster_addr_list[i].port] = [self.nextIdx, prevLogIdx, prevLogTerm]
+                            self.nodeData[self.cluster_addr_list[i].port] = [self.nextIdx['port'], self.nextIdx['prevLogIdx'], self.nextIdx['prevLogTerm']]
                             print("Self_node_data: ", self.nodeData)
 
             print("Log replication success...")
@@ -416,18 +418,18 @@ class RaftNode:
         self.cdTimer.reset()
         request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
         if len(self.log) == 0:
-            prevLogIdx = -1
-            prevLogTerm = -1
+            self.nextIdx['prevLogIdx'] = -1
+            self.nextIdx['prevLogTerm'] = -1
         else:
             #print("Log: ", self.log, "\n")
-            prevLogIdx = self.log[len(self.log) - 1].idx
-            prevLogTerm = self.log[len(self.log) - 1].term
+            self.nextIdx['prevLogIdx'] = self.log[len(self.log) - 1].idx
+            self.nextIdx['prevLogTerm'] = self.log[len(self.log) - 1].term
 
         if(request.body.term > self.currentTerm):
             self.currentTerm = request.body.term
             self.votedFor = None
         elif (request.body.term == self.currentTerm):
-            if (prevLogIdx == request.body.prevLogIdx and prevLogTerm == request.body.prevLogTerm):
+            if (self.nextIdx['prevLogIdx'] == request.body.self.nextIdx['prevLogIdx'] and self.nextIdx['prevLogTerm'] == request.body.self.nextIdx['prevLogTerm']):
                 print("Request from Leader:\n", request, "\n")
 
                 for i in range(request.body.leaderCommit, len(request.body.entries)):

@@ -6,9 +6,9 @@ from lib.struct.address import Address
 class AppendEntriesBody():
     __slots__ = ('term', 'leaderId', 'prevLogIdx', 'prevLogTerm', 'entries', 'leaderCommit')
 
-    def __init__(self, term: int, leaderId: int, prevLogIdx: int, prevLogTerm: int, entries: List[LogEntry], leaderCommit: int) -> None:
+    def __init__(self, term: int, leaderId: Address, prevLogIdx: int, prevLogTerm: int, entries: List[LogEntry], leaderCommit: int) -> None:
         self.term: int = term
-        self.leaderId: int = leaderId
+        self.leaderId: Address = leaderId
         self.prevLogIdx: int = prevLogIdx
         self.prevLogTerm: int = prevLogTerm
         self.entries: List[LogEntry] = entries

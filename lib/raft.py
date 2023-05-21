@@ -343,7 +343,7 @@ class RaftNode:
     def log_replication(self, cliReq: ClientRequest):
         print("Log Replication")
 
-        log_entry = LogEntry(self.currentTerm, self.commitIdx + 1, cliReq.dest, 
+        log_entry = LogEntry(self.currentTerm, self.commitIdx + 1, cliReq.body.clientID, 
                              cliReq.body.command, cliReq.body.requestNumber, None)
         self.log.append(log_entry)
 
@@ -363,7 +363,7 @@ class RaftNode:
                     prevLogIdx = -1
                     prevLogTerm = -1
 
-                entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, prevLogIdx, 
+                entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, self.address, prevLogIdx, 
                                                             prevLogTerm, self.log, self.nextIdx)
 
                 print("Sending log replication request to all nodes...")

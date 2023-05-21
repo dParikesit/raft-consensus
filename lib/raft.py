@@ -26,8 +26,8 @@ from lib.struct.response.response import (AppendEntriesResponse,
 
 class RaftNode:
     HEARTBEAT_INTERVAL   = 1
-    ELECTION_TIMEOUT_MIN = 2
-    ELECTION_TIMEOUT_MAX = 3
+    ELECTION_TIMEOUT_MIN = 2.0
+    ELECTION_TIMEOUT_MAX = 3.0
     RPC_TIMEOUT          = 0.5
 
     class NodeType(Enum):
@@ -168,8 +168,9 @@ class RaftNode:
             response     = json.loads(result, cls=ResponseDecoder)
             self.__print_log(str(response))
             return response
-        except:
-            print("Exception occured")
+        except Exception as error:
+            # print("Exception occured")
+            print(error)
             return None
 
     
@@ -244,25 +245,29 @@ class RaftNode:
                 request = RequestVoteRequest(addr, "election_vote", RequestVoteBody(self.currentTerm, self.address, len(self.log), self.log[-1].term if len(self.log)>0 else -1))
                 task = asyncio.ensure_future(self.__send_request_async(request))
                 tasks.append(task)
-        responses: List[RequestVoteResponse] = await asyncio.gather(*tasks)
+        responses: List[RequestVoteResponse | None] = await asyncio.gather(*tasks)
+        print(responses)
         for response in responses:
-            if response:
+            if response != None:
                 if response.voteGranted:
                     voteCount += 1
                 else:
                     if response.term > self.currentTerm:
                         self.type = RaftNode.NodeType.FOLLOWER # Bukan paling update
                         return
-        
-        if voteCount > ((len(self.log)//2) + 1):
+        print("vote count",voteCount, self.currentTerm, ((len(self.cluster_addr_list)//2) + 1))
+        if voteCount >= ((len(self.cluster_addr_list)//2) + 1):
             self.type = RaftNode.NodeType.LEADER
             self.cluster_leader_addr = self.address
             self.cluster_addr_list.remove(self.address)
+            self.heartbeat_thread = Thread(target=asyncio.run, daemon=True, args=[self.__leader_heartbeat()])
+            self.heartbeat_thread.start()
         else:
             self.type = RaftNode.NodeType.FOLLOWER
             self.cdTimer.reset()
     
     def election_vote(self, json_request: str) -> str:
+        self.cdTimer.reset()
         request: RequestVoteRequest = json.loads(json_request, cls=RequestDecoder)
         response = RequestVoteResponse(self.currentTerm, False)
 

@@ -60,7 +60,7 @@ class RequestDecoder(JSONDecoder):
     def object_hook(self, obj):
         if isinstance(obj, dict) and "type" in obj:
             if obj["type"] == 'AppendEntriesRequest':
-                return AppendEntriesRequest(obj["dest"], obj["func_name"], AppendEntriesBody(obj["body"]["term"], obj["body"]["leaderId"], obj["body"]["prevLogIdx"], obj["body"]["prevLogTerm"], obj["body"]["entries"], obj["body"]["leaderCommit"]))
+                return AppendEntriesRequest(obj["dest"], obj["func_name"], AppendEntriesBody(obj["body"]["term"], obj["body"]["leaderId"], obj["body"]["prevLogIdx"], obj["body"]["prevLogTerm"], [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["body"]["entries"]], obj["body"]["leaderCommit"]))
             if obj["type"] == 'RequestVoteRequest':
                 return RequestVoteRequest(obj["dest"], obj["func_name"], RequestVoteBody(obj["body"]["term"], obj["body"]["candidateId"], obj["body"]["lastLogIdx"], obj["body"]["lastLogTerm"]))
             if obj["type"] == 'StringRequest':

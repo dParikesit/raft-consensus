@@ -1,5 +1,5 @@
 from json import JSONDecoder, JSONEncoder, dumps
-from typing import Any, List, Tuple, Optional
+from typing import Any, List, Optional, Tuple
 
 from lib.struct.address import Address
 from lib.struct.logEntry import LogEntry
@@ -48,7 +48,7 @@ class ResponseEncoder(JSONEncoder):
                 "status": o.status,
                 "result": o.result
             }
-        if isinstance(o, ClientRiderectResponse):
+        if isinstance(o, ClientRedirectResponse):
             return{
                 "type"  : o.type,
                 "status": o.status,
@@ -80,10 +80,10 @@ class ResponseDecoder(JSONDecoder):
                 return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]), [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]], obj["cluster_addr_list"])
             if obj["type"] == 'ClientRequestResponse':
                 return ClientRequestResponse(obj["requestNumber"], obj["status"], obj["result"])
-            if obj["type"] == 'ClientRiderectResponse':
-                return ClientRiderectResponse(obj["status"], obj["address"])
+            if obj["type"] == 'ClientRedirectResponse':
+                return ClientRedirectResponse(obj["status"], obj["address"])
             if obj["type"] == 'ClientRequestLogResponse':
-                return ClientRequestLogResponse(obj["status"], obj["requestNumber"], obj["log"])
+                return ClientRequestLogResponse(obj["status"], obj["requestNumber"], [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]])
         return obj
 
 class Response:
@@ -129,15 +129,15 @@ class ClientRequestResponse(Response):
 
     def __init__(self, requestNumber: int, status: str, result: Optional[str]) -> None:
         super().__init__("ClientRequestResponse")
-        self.requestNumber: int     = requestNumber
-        self.status:   str          = status
-        self.result:        str     = result
+        self.requestNumber: int             = requestNumber
+        self.status:        str             = status
+        self.result:        Optional[str]   = result
 
-class ClientRiderectResponse(Response):
+class ClientRedirectResponse(Response):
     __slots__ = ('status', 'address')
 
     def __init__(self, status: str, address: Address) -> None:
-        super().__init__("ClientRiderectResponse")
+        super().__init__("ClientRedirectResponse")
         self.status:    str         = status
         self.address:   Address     = address
 

@@ -4,19 +4,24 @@
 # dimana localhost 3000 nya tuh server
 
 import json
+import re
 import sys
 import time
-import re
+import xmlrpc.client
 from enum import Enum
 from typing import Any, Optional
 from xmlrpc.client import ServerProxy
-import xmlrpc.client
 
-from lib.struct.request.request import Request, RequestEncoder, ClientRequest
-from lib.struct.response.response import Response, ResponseDecoder, ClientRequestResponse, ClientRiderectResponse, ClientRequestLogResponse
-from lib.struct.request.body import ClientRequestBody
 from lib.struct.address import Address
 from lib.struct.logEntry import LogEntry
+from lib.struct.request.body import ClientRequestBody
+from lib.struct.request.request import ClientRequest, Request, RequestEncoder
+from lib.struct.response.response import (ClientRedirectResponse,
+                                          ClientRequestLogResponse,
+                                          ClientRequestResponse, Response,
+                                          ResponseDecoder)
+
+
 class TimeoutTransport(xmlrpc.client.Transport):
     def __init__(self, timeout=None, *args, **kwargs):
         self.timeout = timeout
@@ -43,7 +48,7 @@ class Client:
             print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) {res.status}!")
         
         # Response redirect
-        if isinstance(res, ClientRiderectResponse):
+        if isinstance(res, ClientRedirectResponse):
             print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request redirected to [{self.ip}:{self.port}]!\n")
 
         if isinstance(res, ClientRequestLogResponse):
@@ -52,7 +57,7 @@ class Client:
                 print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Log is Empty!\n")
             else:
                 for i in range (len(res.log)):
-                    print(f"  [term: {res.log[i]['term']}] [idx: {res.log[i]['idx']}] [ClientID: ] Request ({res.log[i]['reqNum']}) {res.log[i]['operation']}")
+                    print(f"  [term: {res.log[i].term}] [idx: {res.log[i].idx}] [ClientID: ] Request ({res.log[i].reqNum}) {res.log[i].operation}")
 
     def __send_request(self, req: ClientRequest) -> Any:
         json_request = json.dumps(req, cls=RequestEncoder)

@@ -12,12 +12,15 @@ from lib.struct.logEntry import LogEntry
 from lib.struct.request.body import AppendEntriesBody, RequestVoteBody
 from lib.struct.request.request import (AddressRequest, AppendEntriesRequest,
                                         ClientRequest, Request, RequestDecoder,
-                                        RequestEncoder, StringRequest, RequestVoteRequest)
+                                        RequestEncoder, RequestVoteRequest,
+                                        StringRequest)
 from lib.struct.response.response import (AppendEntriesResponse,
+                                          ClientRedirectResponse,
+                                          ClientRequestLogResponse,
                                           ClientRequestResponse,
-                                          MembershipResponse, Response,
-                                          ResponseDecoder, ResponseEncoder, RequestVoteResponse, 
-                                          ClientRiderectResponse, ClientRequestLogResponse)
+                                          MembershipResponse,
+                                          RequestVoteResponse, Response,
+                                          ResponseDecoder, ResponseEncoder)
 
 
 class RaftNode:
@@ -291,7 +294,7 @@ class RaftNode:
             print("LOG REPLICATION")
             # time.sleep(11)
         else:
-            response = ClientRiderectResponse("Redirect", self.cluster_leader_addr)
+            response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
             print("Response to Client", response, "\n")
 
         return json.dumps(response, cls=ResponseEncoder)
@@ -305,7 +308,7 @@ class RaftNode:
             response = ClientRequestLogResponse("success", request.body.requestNumber, self.log)
             print("Response to Client", response, "\n")
         else:
-            response = ClientRiderectResponse("Redirect", self.cluster_leader_addr)
+            response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
             print("Response to Client", response, "\n")
 
         return json.dumps(response, cls=ResponseEncoder)

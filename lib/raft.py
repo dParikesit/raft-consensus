@@ -11,17 +11,27 @@ from lib.timer.CountdownTimer import CountdownTimer
 from lib.struct.address import Address
 from lib.struct.logEntry import LogEntry
 from lib.struct.request.body import AppendEntriesBody, RequestVoteBody
-from lib.struct.request.request import (AddressRequest, AppendEntriesRequest,
-                                        ClientRequest, Request, RequestDecoder,
-                                        RequestEncoder, RequestVoteRequest,
-                                        StringRequest)
-from lib.struct.response.response import (AppendEntriesResponse,
-                                          ClientRedirectResponse,
-                                          ClientRequestLogResponse,
-                                          ClientRequestResponse,
-                                          MembershipResponse,
-                                          RequestVoteResponse, Response,
-                                          ResponseDecoder, ResponseEncoder)
+from lib.struct.request.request import (
+    AddressRequest,
+    AppendEntriesRequest,
+    ClientRequest,
+    Request,
+    RequestDecoder,
+    RequestEncoder,
+    RequestVoteRequest,
+    StringRequest,
+)
+from lib.struct.response.response import (
+    AppendEntriesResponse,
+    ClientRedirectResponse,
+    ClientRequestLogResponse,
+    ClientRequestResponse,
+    MembershipResponse,
+    RequestVoteResponse,
+    Response,
+    ResponseDecoder,
+    ResponseEncoder,
+)
 
 
 class RaftNode:
@@ -35,7 +45,7 @@ class RaftNode:
         CANDIDATE = 2
         FOLLOWER  = 3
 
-    def __init__(self, application : Any, addr: Address, contact_addr: Optional[Address] = None):
+    def __init__(self, application: Any, addr: Address, contact_addr: Optional[Address] = None):
         socket.setdefaulttimeout(RaftNode.RPC_TIMEOUT)
         # Self properties
         self.app:                   Any                 = application
@@ -51,7 +61,7 @@ class RaftNode:
         self.log:                   List[LogEntry]      = [] # First idx is 0
         self.commitIdx:             int                 = -1
         self.lastApplied:           int                 = -1
-        
+
         # Leader properties (Not None if leader, else None)
         self.nextIdx:               Optional[List[int]] = None
         self.matchIdx:              Optional[List[int]] = None
@@ -67,8 +77,7 @@ class RaftNode:
         else:
             self.__try_to_apply_membership(contact_addr)
             self.cdTimer.start()
-            
-            
+
     # Internal Raft Node methods
     def __print_log(self, text: str):
         print(f"[{self.address}] [{time.strftime('%H:%M:%S')}] {text}")
@@ -295,34 +304,42 @@ class RaftNode:
     def execute(self, json_request: str) -> str:
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
         print("Request from Client\n", request, "\n")
-        
+
         # Check leader or follower
-        if(self.address == self.cluster_leader_addr):
-            response = ClientRequestResponse(request.body.requestNumber, "success", "result")
-            print("Response to Client", response, "\n")
-            self.log_replication(request)
-            print("LOG REPLICATION")
-            # time.sleep(11)
+        if self.cluster_leader_addr is not None:
+            if self.address == self.cluster_leader_addr:
+                response = ClientRequestResponse(request.body.requestNumber, "success", "result")
+                print("Response to Client", response, "\n")
+                self.log_replication(request)
+                print("LOG REPLICATION")
+                # time.sleep(11)
+            else:
+                response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
+                print("Response to Client", response, "\n")
         else:
-            response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
+            response = ClientRedirectResponse("No Leader", None)
             print("Response to Client", response, "\n")
 
         return json.dumps(response, cls=ResponseEncoder)
-    
+
     def request_log(self, json_request: str):
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
         print("Request from Client\n", request, "\n")
 
         # Check leader or follower
-        if(self.address == self.cluster_leader_addr):
-            response = ClientRequestLogResponse("success", request.body.requestNumber, self.log)
-            print("Response to Client", response, "\n")
+        if self.cluster_leader_addr is not None:
+            if self.address == self.cluster_leader_addr:
+                response = ClientRequestLogResponse("success", request.body.requestNumber, self.log)
+                print("Response to Client", response, "\n")
+            else:
+                response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
+                print("Response to Client", response, "\n")
         else:
-            response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
+            response = ClientRedirectResponse("No Leader", None)
             print("Response to Client", response, "\n")
 
         return json.dumps(response, cls=ResponseEncoder)
-    
+
     def log_replication(self, cliReq: ClientRequest):
         print("Log Replication")
 

@@ -136,10 +136,10 @@ class ClientRequestResponse(Response):
 class ClientRedirectResponse(Response):
     __slots__ = ('status', 'address')
 
-    def __init__(self, status: str, address: Address) -> None:
+    def __init__(self, status: str, address: Optional[Address]) -> None:
         super().__init__("ClientRedirectResponse")
-        self.status:    str         = status
-        self.address:   Address     = address
+        self.status:    str                 = status
+        self.address:   Optional[Address]   = address
 
 class ClientRequestLogResponse(Response):
     __slots__ = ('status', 'requestNumber', 'log')

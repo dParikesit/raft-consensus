@@ -108,15 +108,16 @@ class RaftNode:
         # TODO : Send periodic heartbeat
         while True:
             self.__print_log("[Leader] Sending heartbeat...")
+            # self.cluster_addr_list = self.cluster_addr_new_list.copy()
             if(len(self.cluster_addr_list) > 0):
                 for i in range(len(self.cluster_addr_list)):
-                    if(self.cluster_addr_list[i].port not in self.nodeData):
+                    if(self.cluster_addr_list[i].port not in self.nextIdx):
                         self.nextIdx[self.cluster_addr_list[i].port] = 0
 
                     nextIdx = self.nextIdx[self.cluster_addr_list[i].port]
                     if (nextIdx > 1):
-                        prevLogIdx = self.log[nextIdx - 1].idx
-                        prevLogTerm = self.log[nextIdx - 1].term
+                        prevLogIdx = self.log[len(self.log) - 1].idx
+                        prevLogTerm = self.log[len(self.log) - 1].term
                     elif (nextIdx == 1 or nextIdx == 0):
                         prevLogIdx = -1
                         prevLogTerm = -1
@@ -211,18 +212,6 @@ class RaftNode:
             self.cluster_addr_list.append(self.cluster_leader_addr)
             self.cluster_leader_addr = request.body.leaderId
 
-        print("JSON REQ: ", json_request)
-        '''response = {
-            "term": self.currentTerm + 1,
-            "leaderId": self.cluster_leader_addr,
-            "self.nextIdx['prevLogIdx']": self.nodeData[self.cluster_leader_addr.port][1],
-            "self.nextIdx['prevLogTerm']": self.nodeData[self.cluster_leader_addr.port][2],
-            "entries": [],
-            "leaderCommit": self.nodeData[self.cluster_leader_addr.port][0],
-
-            "heartbeat_response": "ack",
-            "address":            self.address
-        }'''
         response = AppendEntriesResponse(self.currentTerm, True)
         return json.dumps(response, cls=ResponseEncoder)
     
@@ -734,13 +723,16 @@ class RaftNode:
             #print("Log: ", self.log, "\n")
             prevLogIdx = self.log[len(self.log) - 1].idx
             prevLogTerm = self.log[len(self.log) - 1].term
-        print(request.body.term, self.currentTerm)
+        print(request.body.term, self.currentTerm, prevLogIdx,  request.body.prevLogIdx, prevLogTerm, request.body.prevLogTerm)
         if(request.body.term > self.currentTerm):
             self.currentTerm = request.body.term
             self.votedFor = None
             response = AppendEntriesResponse(self.currentTerm, True)
             return json.dumps(response, cls=ResponseEncoder)
         elif (request.body.term == self.currentTerm):
+            if(request.body.entries == []):
+                response = AppendEntriesResponse(self.currentTerm, True)
+                return json.dumps(response, cls=ResponseEncoder)
             if (prevLogIdx == request.body.prevLogIdx and prevLogTerm == request.body.prevLogTerm):
                 print("Request from Leader:\n", request, "\n")
 

@@ -392,6 +392,13 @@ class RaftNode:
                 if ack_array[i] == True:
                     request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_commit_log", entries)
                     response: AppendEntriesResponse = self.__send_request(request)
+        
+        else:
+            print("Log replication success...")
+            print("Committing log...")
+            self.log[len(self.log) - 1].result = "Committed"
+            print("Leader Log: ", self.log, "\n")
+
 
 
     def receiver_replicate_log(self, json_request: str):
@@ -403,8 +410,8 @@ class RaftNode:
             prevLogTerm = -1
         else:
             #print("Log: ", self.log, "\n")
-            prevLogIdx = self.log[len(self.log) - 1]['idx']
-            prevLogTerm = self.log[len(self.log) - 1]['term']
+            prevLogIdx = self.log[len(self.log) - 1].idx
+            prevLogTerm = self.log[len(self.log) - 1].term
 
         if(request.body.term > self.currentTerm):
             self.currentTerm = request.body.term
@@ -416,12 +423,11 @@ class RaftNode:
                 for i in range(request.body.leaderCommit, len(request.body.entries)):
                     self.log.append(request.body.entries[i])
                     self.lastApplied += 1
-                    if (request.body.entries[i]['result'] == "Committed"):
+                    if (request.body.entries[i].result == "Committed"):
                         self.commitIdx += 1
                          
                 print("Success append log to follower...")
                 print("Follower Log: ", self.log, "\n")
-
                 response = AppendEntriesResponse(self.currentTerm, True)
                 return json.dumps(response, cls=ResponseEncoder)
             else:
@@ -435,7 +441,7 @@ class RaftNode:
         print("Receiver commit log...")
         request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
 
-        self.log[request.body.leaderCommit]['result'] = "Committed"
+        self.log[request.body.leaderCommit].result = "Committed"
         self.commitIdx = request.body.leaderCommit
 
         print("Committing log...")

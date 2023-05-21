@@ -282,7 +282,7 @@ class RaftNode:
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
         print("Request from Client\n", request, "\n")
         
-        # TODO : Implement execute
+        # Check leader or follower
         if(self.address == self.cluster_leader_addr):
             response = ClientRequestResponse(request.body.requestNumber, "success", "result")
             print("Response to Client", response, "\n")

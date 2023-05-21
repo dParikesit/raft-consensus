@@ -54,6 +54,14 @@ class ResponseEncoder(JSONEncoder):
                 "status": o.status,
                 "address"  : o.address
             }
+        if isinstance(o, ClientRequestLogResponse):
+            return{
+                "type"          : o.type,
+                "status"        : o.status,
+                "requestNumber" : o.requestNumber,
+                "log"           : o.log
+            }
+
         if isinstance(o, Response):
             return {"type": o.type}
         return super().default(o)
@@ -74,6 +82,8 @@ class ResponseDecoder(JSONDecoder):
                 return ClientRequestResponse(obj["requestNumber"], obj["status"], obj["result"])
             if obj["type"] == 'ClientRiderectResponse':
                 return ClientRiderectResponse(obj["status"], obj["address"])
+            if obj["type"] == 'ClientRequestLogResponse':
+                return ClientRequestLogResponse(obj["status"], obj["requestNumber"], obj["log"])
         return obj
 
 class Response:
@@ -130,3 +140,12 @@ class ClientRiderectResponse(Response):
         super().__init__("ClientRiderectResponse")
         self.status:    str         = status
         self.address:   Address     = address
+
+class ClientRequestLogResponse(Response):
+    __slots__ = ('status', 'requestNumber', 'log')
+
+    def __init__(self, status: str, requestNumber: int, log: List[LogEntry]) -> None:
+        super().__init__("ClientRequestLogResponse")
+        self.status:        str             = status
+        self.requestNumber: int             = requestNumber
+        self.log:           List[LogEntry]  = log

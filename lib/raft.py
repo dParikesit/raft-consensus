@@ -16,7 +16,8 @@ from lib.struct.request.request import (AddressRequest, AppendEntriesRequest,
 from lib.struct.response.response import (AppendEntriesResponse,
                                           ClientRequestResponse,
                                           MembershipResponse, Response,
-                                          ResponseDecoder, ResponseEncoder, RequestVoteResponse, ClientRiderectResponse)
+                                          ResponseDecoder, ResponseEncoder, RequestVoteResponse, 
+                                          ClientRiderectResponse, ClientRequestLogResponse)
 
 
 class RaftNode:
@@ -295,6 +296,20 @@ class RaftNode:
 
         return json.dumps(response, cls=ResponseEncoder)
     
+    def request_log(self, json_request: str):
+        request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
+        print("Request from Client\n", request, "\n")
+
+        # Check leader or follower
+        if(self.address == self.cluster_leader_addr):
+            response = ClientRequestLogResponse("success", request.body.requestNumber, self.log)
+            print("Response to Client", response, "\n")
+        else:
+            response = ClientRiderectResponse("Redirect", self.cluster_leader_addr)
+            print("Response to Client", response, "\n")
+
+        return json.dumps(response, cls=ResponseEncoder)
+    
     def log_replication(self, cliReq: ClientRequest):
         print("Log Replication")
 
@@ -332,8 +347,6 @@ class RaftNode:
                             ack_array[i] = True
                             self.nodeData[self.cluster_addr_list[i].port] = [self.nextIdx, prevLogIdx, prevLogTerm]
                             print("Self_node_data: ", self.nodeData)
-                            
-
 
             print("Log replication success...")
             print("Committing log...")

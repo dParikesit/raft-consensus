@@ -386,7 +386,7 @@ class RaftNode:
         
     async def __joint_consensus(self, request: Request):
         print("Start Joint Consensus")
-        await asyncio.sleep(2)
+        await asyncio.sleep(5)
         print("Joint Consensus Running...")
         print("Cold:", self.cluster_addr_list)
         print("Cnew:", self.cluster_addr_new_list)

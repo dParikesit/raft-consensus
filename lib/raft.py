@@ -196,6 +196,15 @@ class RaftNode:
     def heartbeat(self, json_request: str) -> str:
         # TODO : Implement heartbeat
         self.cdTimer.reset()
+        request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
+
+        if not self.cluster_leader_addr:
+            self.cluster_leader_addr = request.body.leaderId
+
+        if self.cluster_leader_addr and request.body.leaderId != self.cluster_leader_addr:
+            self.cluster_addr_list.append(self.cluster_leader_addr)
+            self.cluster_leader_addr = request.body.leaderId
+
         print("JSON REQ: ", json_request)
         '''response = {
             "term": self.currentTerm + 1,
@@ -276,7 +285,6 @@ class RaftNode:
             self.cdTimer.reset()
     
     def election_vote(self, json_request: str) -> str:
-        self.cdTimer.reset()
         request: RequestVoteRequest = json.loads(json_request, cls=RequestDecoder)
         response = RequestVoteResponse(self.currentTerm, False)
 
@@ -298,6 +306,7 @@ class RaftNode:
             return json.dumps(response, cls=ResponseEncoder)
             
         self.votedFor = request.body.candidateId
+        self.cdTimer.reset()
         return json.dumps(response, cls=ResponseEncoder)
 
     # Client RPCs

@@ -108,13 +108,14 @@ class RaftNode:
                         self.nodeData[self.cluster_addr_list[i].port] = [0, -1, -1]
                     entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, self.nodeData[self.cluster_addr_list[i].port][1], self.nodeData[self.cluster_addr_list[i].port][2], [], self.nodeData[self.cluster_addr_list[i].port][0])
                     try:
-                        request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
+                        request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "heartbeat", entries)
                         response: AppendEntriesResponse = self.__send_request(request)
                         if response.success == True:
                             self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} success...")
                         else:
                             self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} failed...")
-                    except:
+                    except Exception as e:
+                        self.__print_log(f"Error: {e}")
                         self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} died...")
                         self.__print_log(f"Node {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} will be deleted...")
                         self.cluster_addr_list.pop(i)
@@ -180,17 +181,20 @@ class RaftNode:
     # Inter-node RPCs
     def heartbeat(self, json_request: str) -> str:
         # TODO : Implement heartbeat
-        response = {
+        print("JSON REQ: ", json_request)
+        '''response = {
             "term": self.currentTerm + 1,
             "leaderId": self.cluster_leader_addr,
-            "prevLogIdx": 0,
-            "prevLogTerm": 0,
+            "prevLogIdx": self.nodeData[self.cluster_leader_addr.port][1],
+            "prevLogTerm": self.nodeData[self.cluster_leader_addr.port][2],
             "entries": [],
-            "leaderCommit": 0
-            #"heartbeat_response": "ack",
-            #"address":            self.address
-        }
-        return json.dumps(response)
+            "leaderCommit": self.nodeData[self.cluster_leader_addr.port][0],
+
+            "heartbeat_response": "ack",
+            "address":            self.address
+        }'''
+        response = AppendEntriesResponse(self.currentTerm, True)
+        return json.dumps(response, cls=ResponseEncoder)
     
     async def __send_membership(self, request: Request):
         cluster_addr_send_list = self.cluster_addr_list.copy()
@@ -327,6 +331,7 @@ class RaftNode:
                         if response.success == True:
                             ack_array[i] = True
                             self.nodeData[self.cluster_addr_list[i].port] = [self.nextIdx, prevLogIdx, prevLogTerm]
+                            print("Self_node_data: ", self.nodeData)
                             
 
 

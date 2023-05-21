@@ -77,7 +77,7 @@ class ResponseDecoder(JSONDecoder):
             if obj["type"] == 'RequestVoteResponse':
                 return RequestVoteResponse(obj["term"], obj["voteGranted"])
             if obj["type"] == 'MembershipResponse':
-                return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]), [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]], obj["cluster_addr_list"])
+                return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]), [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]], [Address(elem['ip'], elem['port']) for elem in obj["cluster_addr_list"]])
             if obj["type"] == 'ClientRequestResponse':
                 return ClientRequestResponse(obj["requestNumber"], obj["status"], obj["result"])
             if obj["type"] == 'ClientRedirectResponse':

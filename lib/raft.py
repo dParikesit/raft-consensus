@@ -7,6 +7,7 @@ from threading import Thread
 from typing import AbstractSet, Any, List, MutableSet, Optional, Tuple
 from xmlrpc.client import ServerProxy
 
+from lib.timer.CountdownTimer import CountdownTimer
 from lib.struct.address import Address
 from lib.struct.logEntry import LogEntry
 from lib.struct.request.body import AppendEntriesBody, RequestVoteBody
@@ -56,24 +57,18 @@ class RaftNode:
         self.matchIdx:              Optional[List[int]] = None
         self.nodeData:              Optional[dict[Address]] = {}
 
+        # Follower properties
+        self.cdTimer:               CountdownTimer      = CountdownTimer(RaftNode.ELECTION_TIMEOUT_MIN, RaftNode.ELECTION_TIMEOUT_MAX, self.election_start)
+
         self.__print_log("Server Start Time")
         if contact_addr is None:
             self.cluster_addr_list.append(self.address)
             self.__initialize_as_leader()
         else:
             self.__try_to_apply_membership(contact_addr)
-            self.check_time_to_election = Thread(target=asyncio.run, daemon=True, args=[self.__check_time_to_election()])
-            self.check_time_to_election.start()
-
-    async def __check_time_to_election(self):
-        #TODO: Break diganti dengan leader election
-        while True:
-            curr_time = round(time.time()*1000)
-            if(self.time_to_election != 0 and curr_time - self.time_to_election > 2000):
-                self.__print_log(f"Node {self.address.ip}:{self.address.port} want to be a leader...")
-                break
+            self.cdTimer.start()
             
-
+            
     # Internal Raft Node methods
     def __print_log(self, text: str):
         print(f"[{self.address}] [{time.strftime('%H:%M:%S')}] {text}")
@@ -165,13 +160,18 @@ class RaftNode:
         self.cluster_leader_addr = redirected_addr
 
     async def __send_request_async(self, req: Request) -> Any:
-        node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
-        json_request = json.dumps(req, cls=RequestEncoder)
-        rpc_function = getattr(node, req.func_name)
-        result = rpc_function(json_request)
-        response     = json.loads(result, cls=ResponseDecoder)
-        self.__print_log(str(response))
-        return response
+        try:
+            node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
+            json_request = json.dumps(req, cls=RequestEncoder)
+            rpc_function = getattr(node, req.func_name)
+            result = rpc_function(json_request)
+            response     = json.loads(result, cls=ResponseDecoder)
+            self.__print_log(str(response))
+            return response
+        except:
+            print("Exception occured")
+            return None
+
     
     def __send_request(self, req: Request) -> Any:
         # Warning : This method is blocking
@@ -185,6 +185,7 @@ class RaftNode:
     # Inter-node RPCs
     def heartbeat(self, json_request: str) -> str:
         # TODO : Implement heartbeat
+        self.cdTimer.reset()
         print("JSON REQ: ", json_request)
         '''response = {
             "term": self.currentTerm + 1,
@@ -240,22 +241,26 @@ class RaftNode:
 
         for addr in self.cluster_addr_list:
             if addr != self.address:
-                request = RequestVoteRequest(addr, "election_vote", RequestVoteBody(self.currentTerm, self.address, len(self.log)+1, self.log[-1].term))
+                request = RequestVoteRequest(addr, "election_vote", RequestVoteBody(self.currentTerm, self.address, len(self.log), self.log[-1].term if len(self.log)>0 else -1))
                 task = asyncio.ensure_future(self.__send_request_async(request))
                 tasks.append(task)
         responses: List[RequestVoteResponse] = await asyncio.gather(*tasks)
         for response in responses:
-            if response.voteGranted:
-                voteCount += 1
-            else:
-                if response.term > self.currentTerm:
-                    self.type = RaftNode.NodeType.FOLLOWER # Bukan paling update
-                    return
+            if response:
+                if response.voteGranted:
+                    voteCount += 1
+                else:
+                    if response.term > self.currentTerm:
+                        self.type = RaftNode.NodeType.FOLLOWER # Bukan paling update
+                        return
         
         if voteCount > ((len(self.log)//2) + 1):
             self.type = RaftNode.NodeType.LEADER
             self.cluster_leader_addr = self.address
             self.cluster_addr_list.remove(self.address)
+        else:
+            self.type = RaftNode.NodeType.FOLLOWER
+            self.cdTimer.reset()
     
     def election_vote(self, json_request: str) -> str:
         request: RequestVoteRequest = json.loads(json_request, cls=RequestDecoder)
@@ -266,7 +271,7 @@ class RaftNode:
         else:
             return json.dumps(response, cls=ResponseEncoder)
 
-        if request.body.lastLogTerm >= self.log[-1].term and request.body.lastLogIdx >= len(self.log) + 1:
+        if len(self.log)==0 or (request.body.lastLogTerm >= self.log[-1].term and request.body.lastLogIdx >= len(self.log)):
             response.voteGranted = True
         else:
             return json.dumps(response, cls=ResponseEncoder)
@@ -369,7 +374,7 @@ class RaftNode:
 
     def receiver_replicate_log(self, json_request: str):
         print("Receiver replicate log...")
-        self.time_to_election = round(time.time()*1000)
+        self.cdTimer.reset()
         request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
         if len(self.log) == 0:
             prevLogIdx = -1

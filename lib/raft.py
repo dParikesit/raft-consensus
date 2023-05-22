@@ -245,7 +245,7 @@ class RaftNode:
     # Client RPCs
     def execute(self, json_request: str):
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
-        self.__print_log(f""""Request from Client\n", {request}, "\n""""")
+        print(f"[{self.address}] [{time.strftime('%H:%M:%S')}] Request from [{request.body.clientID}] [{request.body.requestNumber}] {request.body.command}\n")
 
         # Check leader or follower
         if self.cluster_leader_addr is not None:
@@ -273,7 +273,7 @@ class RaftNode:
 
     def request_log(self, json_request: str) -> str:
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
-        print("Request from Client\n", request, "\n")
+        print(f"\n[{self.address}] [{time.strftime('%H:%M:%S')}] Request from [{request.body.clientID}] [{request.body.requestNumber}] {request.body.command}\n")
 
         # Check leader or follower
         if self.cluster_leader_addr is not None:

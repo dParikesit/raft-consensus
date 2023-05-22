@@ -255,11 +255,10 @@ class RaftNode:
                 log_entry = LogEntry(self.currentTerm, True, request.body.clientID, request.body.command, request.body.requestNumber, None)
                 self.log.append(log_entry)
                 self.log_replication()
-                for idx in range(0, self.commitIdx):
+                for idx in range(0, self.commitIdx+1):
                     if response.status=="" and self.log[idx] and self.log[idx].clientId == request.body.clientID and self.log[idx].reqNum == request.body.requestNumber:
                         response.status = "success" if self.log[idx].result else "failed"
                         response.result = self.log[idx].result
-                        break
                 if response.status=="":
                     response.status = "Failed"
             else:
@@ -294,6 +293,8 @@ class RaftNode:
         self.beatTimer.reset()
 
         # Check whether commit index can be increased.
+        print(self.log)
+        print(self.nextIdx)
         if len(self.log)>0:
             newCommitIdx = 0
             for idx in range(len(self.log)-1, self.commitIdx, -1):
@@ -306,6 +307,7 @@ class RaftNode:
                     self.commit_entry(idx)
                     self.lastApplied +=1
             self.commitIdx = newCommitIdx
+        print(self.commitIdx)
 
         if len(self.cluster_addr_list)>0:
             self.__print_log(f"Starting log replication")
@@ -329,6 +331,8 @@ class RaftNode:
                         else:
                             self.currentTerm=res.term
                             self.type = RaftNode.NodeType.FOLLOWER
+            
+            print(self.nextIdx)
         else:
             self.__print_log("Follower not found. Log replication will not run")
 

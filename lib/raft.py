@@ -212,6 +212,9 @@ class RaftNode:
             res = ConfigChangeResponse(False)
             while not res.success:
                 res = self.__retry_request_async(req)
+
+        self.nextIdx[request.body] = 0
+        self.matchIdx[request.body] = -1
             
         response = MembershipResponse("success", self.address)
         return json.dumps(response, cls=ResponseEncoder)
@@ -252,6 +255,9 @@ class RaftNode:
             self.type = RaftNode.NodeType.LEADER
             self.cluster_leader_addr = self.address
             self.cluster_addr_list.remove(self.address)
+            for addr in self.cluster_addr_list:
+                self.nextIdx[addr] = 0
+                self.matchIdx[addr] = -1
             self.heartbeat_thread = Thread(target=asyncio.run, daemon=True, args=[self.__leader_heartbeat()])
             self.heartbeat_thread.start()
         else:
@@ -359,7 +365,7 @@ class RaftNode:
                             self.matchIdx[res.dest] = self.commitIdx
                         else:
                             self.nextIdx[res.dest] = 0
-                            self.matchIdx[res.dest] = 0
+                            self.matchIdx[res.dest] = -1
                 else:
                     self.type = RaftNode.NodeType.FOLLOWER
 

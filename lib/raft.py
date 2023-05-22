@@ -98,9 +98,6 @@ class RaftNode:
         self.cluster_leader_addr = self.address
         if self.address in self.cluster_addr_list:
             self.cluster_addr_list.remove(self.address)
-        
-        # self.heartbeat_thread = Thread(target=asyncio.run, daemon=True, args=[self.log_replication()])
-        # self.heartbeat_thread.start()
         self.beatTimer.start()
 
     def __try_to_apply_membership(self, contact_addr: Address):
@@ -115,28 +112,18 @@ class RaftNode:
         print("Join successful")
     
     def __send_request(self, req: Request) -> Any:
-        # Warning : This method is blocking
-        node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
-        json_request = json.dumps(req, cls=RequestEncoder)
-        rpc_function = getattr(node, req.func_name)
-        result      = rpc_function(json_request)
-        print(result)
-        response     = json.loads(result, cls=ResponseDecoder)
-        response.dest = req.dest
-        self.__print_log(str(response))
-        return response
-        # try:
-        #     node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
-        #     json_request = json.dumps(req, cls=RequestEncoder)
-        #     rpc_function = getattr(node, req.func_name)
-        #     result      = rpc_function(json_request)
-        #     response     = json.loads(result, cls=ResponseDecoder)
-        #     response.dest = req.dest
-        #     self.__print_log(str(response))
-        #     return response
-        # except:
-        #     self.__print_log(f"{req.type} failed")
-        #     return None
+        try:
+            node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
+            json_request = json.dumps(req, cls=RequestEncoder)
+            rpc_function = getattr(node, req.func_name)
+            result      = rpc_function(json_request)
+            response     = json.loads(result, cls=ResponseDecoder)
+            response.dest = req.dest
+            self.__print_log(str(response))
+            return response
+        except:
+            self.__print_log(f"{req.type} failed")
+            return None
     
     def __retry_send_request(self, req: Request) -> Any:
         response = None
@@ -315,7 +302,7 @@ class RaftNode:
             # Send append entries that append AND commit logs. Remember that not all server will return (caused of network problem), hence the not all log and commit index in follower will be updated
 
             with ThreadPoolExecutor() as executor:
-                futures = [executor.submit(self.__send_request(AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr.port]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr.port]-1].term, self.log[self.nextIdx[addr.port]:], self.commitIdx)))) for addr in self.cluster_addr_list]
+                futures = [executor.submit(self.__send_request, AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr.port]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr.port]-1].term, self.log[self.nextIdx[addr.port]:], self.commitIdx))) for addr in self.cluster_addr_list]
                 for future in as_completed(futures):
                     res: AppendEntriesResponse | None = future.result()
                     if res:
@@ -330,24 +317,6 @@ class RaftNode:
                                     self.matchIdx[res.dest.port] = -1
                         else:
                             self.type = RaftNode.NodeType.FOLLOWER
-            
-            # for addr in self.cluster_addr_list:
-            #     req = AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr.port]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr.port]-1].term, self.log[self.nextIdx[addr.port]:], self.commitIdx))
-            #     print(req)
-            #     res: AppendEntriesResponse | None = self.__send_request(req)
-            #     if res:
-            #         if res.term <= self.currentTerm:
-            #             self.currentTerm=res.term
-            #             if res.dest:
-            #                 if res.success:
-            #                     self.nextIdx[res.dest.port] = len(self.log)
-            #                     self.matchIdx[res.dest.port] = self.commitIdx
-            #                 else:
-            #                     self.nextIdx[res.dest.port] = 0
-            #                     self.matchIdx[res.dest.port] = -1
-            #         else:
-            #             self.type = RaftNode.NodeType.FOLLOWER
-        # self.beatTimer.start()
 
     def receiver_log_replication(self, json_request: str) -> str:
         print("Receiver replicate log...")
@@ -385,8 +354,6 @@ class RaftNode:
         return json.dumps(response, cls=ResponseEncoder)
 
     def commit_entry(self, idx: int):
-        # TODO Check duplicate and operation type
-
         if(idx != 0):
             # Loop dari (idx - 1) sampe 0
             counter = idx
@@ -407,8 +374,6 @@ class RaftNode:
             self.app.apply(self.log[idx].operation)
     
     def undo_entry(self, idx: int):
-        # TODO Cek undo dan duplicate
-
         if(idx != 0):
             # Loop dari (idx - 1) sampe 0
             counter = idx

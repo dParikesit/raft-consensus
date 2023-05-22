@@ -250,26 +250,25 @@ class RaftNode:
         # Check leader or follower
         if self.cluster_leader_addr is not None:
             if self.address == self.cluster_leader_addr:
-                response = ClientRequestResponse(request.body.requestNumber, "success", "result")
+                response = ClientRequestResponse(request.body.requestNumber, "", None)
                 self.__print_log(f""""Response to Client", {response}, "\n""""")
                 log_entry = LogEntry(self.currentTerm, True, request.body.clientID, request.body.command, request.body.requestNumber, None)
                 self.log.append(log_entry)
                 self.log_replication()
                 for idx in range(0, self.commitIdx):
-                    if self.log[idx] and self.log[idx].clientId == request.body.clientID and self.log[idx].reqNum == request.body.requestNumber and self.log[idx].result:
+                    if response.status=="" and self.log[idx] and self.log[idx].clientId == request.body.clientID and self.log[idx].reqNum == request.body.requestNumber:
+                        response.status = "success" if self.log[idx].result else "failed"
                         response.result = self.log[idx].result
-                        return json.dumps(response, cls=ResponseEncoder)
-                
-                # Not yet committed, do nothing
-                pass
+                        
             else:
                 response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
                 self.__print_log(""""Response to Client", {response}, "\n""""")
-                return json.dumps(response, cls=ResponseEncoder)
         else:
             response = ClientRedirectResponse("No Leader", None)
             self.__print_log(f""""Response to Client", response, "\n""""")
-            return json.dumps(response, cls=ResponseEncoder)
+            
+        return json.dumps(response, cls=ResponseEncoder)
+        
 
     def request_log(self, json_request: str) -> str:
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)

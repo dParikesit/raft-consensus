@@ -427,4 +427,27 @@ class RaftNode:
     
     def undo_entry(self, idx: int):
         # TODO Cek undo dan duplicate
-        pass
+
+        if(idx != 0):
+            # Loop dari (idx - 1) sampe 0
+            counter = idx
+            while counter >= 0:
+                if(self.log[idx].clientId == self.log[counter].clientID and self.log[idx].reqNum == self.log[counter].reqNum and self.log[idx].operation == self.log[counter].operation):
+                    # clientID, reqNum, operation sama -> duplicate -> delete log, don't pop or prepend
+                    break
+                else:
+                    counter -= 1
+
+            if (counter < 0):
+                # No duplicate
+                if(self.log[idx].operation == "dequeue"):
+                    self.app.prepend(self.log[idx].result)
+                else:
+                    self.app.pop()
+
+        else:
+            # First log, no duplicate possible
+            if(self.log[idx].operation == "dequeue"):
+                self.app.prepend(self.log[idx].result)
+            else:
+                self.app.pop()

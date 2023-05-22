@@ -552,7 +552,7 @@ class RaftNode:
     async def log_replication(self):
         print("Log Replication")
 
-        # Check whether commit index can be appended.
+        # Check whether commit index can be increased.
         if len(self.log)>0:
             newCommitIdx = 0
             for idx in range(len(self.log)-1, self.commitIdx, -1):
@@ -566,7 +566,7 @@ class RaftNode:
                     self.lastApplied +=1
             self.commitIdx = newCommitIdx
         
-        # Send append entries that append AND commit logs. Remember that not all server will return (caused of network problem), hence the code above is possible
+        # Send append entries that append AND commit logs. Remember that not all server will return (caused of network problem), hence the not all log and commit index in follower will be updated
         tasks = []
         for addr in self.cluster_addr_list:
             request = AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr]-1].term, self.log[self.nextIdx[addr]:], self.commitIdx))

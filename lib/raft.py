@@ -45,10 +45,10 @@ from lib.struct.response.response import (
 
 
 class RaftNode:
-    HEARTBEAT_INTERVAL   = 1
-    ELECTION_TIMEOUT_MIN = 2.0
-    ELECTION_TIMEOUT_MAX = 3.0
-    RPC_TIMEOUT          = 0.5
+    HEARTBEAT_INTERVAL   = 4
+    ELECTION_TIMEOUT_MIN = 8.0
+    ELECTION_TIMEOUT_MAX = 12.0
+    RPC_TIMEOUT          = 12
 
     class NodeType(Enum):
         LEADER    = 1
@@ -243,7 +243,7 @@ class RaftNode:
         return json.dumps(response, cls=ResponseEncoder)
 
     # Client RPCs
-    def execute(self, json_request: str) -> str:
+    def execute(self, json_request: str):
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
         self.__print_log(f""""Request from Client\n", {request}, "\n""""")
 
@@ -255,14 +255,21 @@ class RaftNode:
                 log_entry = LogEntry(self.currentTerm, True, request.body.clientID, request.body.command, request.body.requestNumber, None)
                 self.log.append(log_entry)
                 self.log_replication()
+                for idx in range(0, self.commitIdx):
+                    if self.log[idx] and self.log[idx].clientId == request.body.clientID and self.log[idx].reqNum == request.body.requestNumber and self.log[idx].result:
+                        response.result = self.log[idx].result
+                        return json.dumps(response, cls=ResponseEncoder)
+                
+                # Not yet committed, do nothing
+                pass
             else:
                 response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
                 self.__print_log(""""Response to Client", {response}, "\n""""")
+                return json.dumps(response, cls=ResponseEncoder)
         else:
             response = ClientRedirectResponse("No Leader", None)
             self.__print_log(f""""Response to Client", response, "\n""""")
-
-        return json.dumps(response, cls=ResponseEncoder)
+            return json.dumps(response, cls=ResponseEncoder)
 
     def request_log(self, json_request: str) -> str:
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)

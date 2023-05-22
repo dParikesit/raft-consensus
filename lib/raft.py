@@ -355,36 +355,32 @@ class RaftNode:
         request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
         response: AppendEntriesResponse = AppendEntriesResponse(self.currentTerm, False)
 
-        print(response)
-
         if(request.body.term < self.currentTerm):
             # Term is greater than leader, this indicates this node is more updated
-            print("Halo 1")
             return json.dumps(response, cls=ResponseEncoder)
         
-        if(self.log[request.body.prevLogIdx].term != request.body.term):
+        if(request.body.prevLogIdx >=0 and self.log[request.body.prevLogIdx].term != request.body.term):
             # Incorrect previous log, reset log and MQ
             self.log = []
             self.app.clear()
-            print("Halo 2")
             return json.dumps(response, cls=ResponseEncoder)
         
-        if(request.body.prevLogIdx < len(self.log)-1):
+        if(request.body.prevLogIdx >=0 and request.body.prevLogIdx < len(self.log)-1):
             # Delete unused log (different tail than leader)
             for idx in range(len(self.log)-1, request.body.prevLogIdx):
                 self.undo_entry(idx)
             del self.log[request.body.prevLogIdx+1:]
-        print("Halo 3")
         
         # Append entries
         self.log += request.body.entries
         response.success = True
 
         # Commit until leader's commitIdx
-        for idx in range(self.commitIdx, request.body.leaderCommit+1):
-            self.commit_entry(idx)
-            self.lastApplied +=1
-        self.commitIdx = request.body.leaderCommit
+        if request.body.leaderCommit>=0:
+            for idx in range(self.commitIdx, request.body.leaderCommit+1):
+                self.commit_entry(idx)
+                self.lastApplied +=1
+            self.commitIdx = request.body.leaderCommit
 
         return json.dumps(response, cls=ResponseEncoder)
 

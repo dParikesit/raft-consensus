@@ -259,9 +259,9 @@ class RaftNode:
                     if response.status=="" and self.log[idx] and self.log[idx].clientId == request.body.clientID and self.log[idx].reqNum == request.body.requestNumber:
                         response.status = "success" if self.log[idx].result else "failed"
                         response.result = self.log[idx].result
+                        break
                 if response.status=="":
-                    response.status = "failed"
-
+                    response.status = "Failed"
             else:
                 response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
                 self.__print_log(""""Response to Client", {response}, "\n""""")

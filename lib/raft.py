@@ -293,21 +293,22 @@ class RaftNode:
     def log_replication(self):
         self.beatTimer.reset()
 
+        # Check whether commit index can be increased.
+        if len(self.log)>0:
+            newCommitIdx = 0
+            for idx in range(len(self.log)-1, self.commitIdx, -1):
+                count = len(dict(filter(lambda val: val[1]-1>= idx, self.nextIdx.items())))
+                if count >= ceil((len(self.cluster_addr_list)+1)/2) + 1:
+                    newCommitIdx = idx
+                    break
+            for idx in range(self.commitIdx, newCommitIdx+1):
+                if self.log[idx].operation.startswith('enqueue') or self.log[idx].operation.startswith('dequeue'):
+                    self.commit_entry(idx)
+                    self.lastApplied +=1
+            self.commitIdx = newCommitIdx
+
         if len(self.cluster_addr_list)>0:
             self.__print_log(f"Starting log replication")
-            # Check whether commit index can be increased.
-            if len(self.log)>0:
-                newCommitIdx = 0
-                for idx in range(len(self.log)-1, self.commitIdx, -1):
-                    count = len(dict(filter(lambda val: val[1]-1>= idx, self.nextIdx.items())))
-                    if count >= ceil((len(self.cluster_addr_list)+1)/2) + 1:
-                        newCommitIdx = idx
-                        break
-                for idx in range(self.commitIdx, newCommitIdx+1):
-                    if self.log[idx].operation.startswith('enqueue') or self.log[idx].operation.startswith('dequeue'):
-                        self.commit_entry(idx)
-                        self.lastApplied +=1
-                self.commitIdx = newCommitIdx
             
             # Send append entries that append AND commit logs. Remember that not all server will return (caused of network problem), hence the not all log and commit index in follower will be updated
 
@@ -329,18 +330,6 @@ class RaftNode:
                             self.currentTerm=res.term
                             self.type = RaftNode.NodeType.FOLLOWER
         else:
-            if len(self.log)>0:
-                newCommitIdx = 0
-                for idx in range(len(self.log)-1, self.commitIdx, -1):
-                    count = len(dict(filter(lambda val: val[1]-1>= idx, self.nextIdx.items())))
-                    if count >= ceil((len(self.cluster_addr_list)+1)/2) + 1:
-                        newCommitIdx = idx
-                        break
-                for idx in range(self.commitIdx, newCommitIdx+1):
-                    if self.log[idx].operation.startswith('enqueue') or self.log[idx].operation.startswith('dequeue'):
-                        self.commit_entry(idx)
-                        self.lastApplied +=1
-                self.commitIdx = newCommitIdx
             self.__print_log("Follower not found. Log replication will not run")
 
     def receiver_log_replication(self, json_request: str) -> str:

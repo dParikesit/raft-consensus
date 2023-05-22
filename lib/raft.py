@@ -307,7 +307,7 @@ class RaftNode:
                 self.commit_entry(idx)
                 self.lastApplied +=1
             self.commitIdx = self.lastApplied
-        print(self.commitIdx)
+        print("commitIdx",self.commitIdx)
 
         if len(self.cluster_addr_list)>0:
             self.__print_log(f"Starting log replication")
@@ -363,11 +363,17 @@ class RaftNode:
         response.success = True
 
         # Commit until leader's commitIdx
+        print(self.log)
+        print(self.nextIdx)
+        print(self.app.length())
+
         if request.body.leaderCommit >= 0:
-            for idx in range(self.commitIdx, request.body.leaderCommit+1):
+            for idx in range(self.commitIdx+1, request.body.leaderCommit+1):
                 self.commit_entry(idx)
                 self.lastApplied +=1
             self.commitIdx = request.body.leaderCommit
+        
+        print("commitIdx",self.commitIdx)
 
         return json.dumps(response, cls=ResponseEncoder)
 

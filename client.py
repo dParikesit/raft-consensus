@@ -66,7 +66,7 @@ class Client:
                 print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Log is Empty!\n")
             else:
                 for i in range(len(res.log)):
-                    print(f"    [term: {res.log[i].term}] [idx: {res.log[i].idx}] [ClientID: {res.log[i].clientId}] Request ({res.log[i].reqNum}) {res.log[i].operation}")
+                    print(f"    [term: {res.log[i].term}] [ClientID: {res.log[i].clientId}] Request ({res.log[i].reqNum}) {res.log[i].operation}")
 
     def __send_request(self, req: ClientRequest) -> Any:
         json_request = json.dumps(req, cls=RequestEncoder)
@@ -115,10 +115,8 @@ class Client:
                         no_leader = True
                         break
 
-                except ConnectionRefusedError:
-                    raise Exception(
-                        "No connection could be made because the target machine actively refused it"
-                    )
+                except ConnectionRefusedError as e:
+                    raise e
 
                 except Exception as e:
                     print(
@@ -159,10 +157,8 @@ class Client:
                     no_leader = True
                     break
 
-            except ConnectionRefusedError:
-                raise Exception(
-                    "No connection could be made because the target machine actively refused it"
-                )
+            except ConnectionRefusedError as e:
+                raise e
 
             except Exception as e:
                 print(
@@ -203,6 +199,17 @@ if __name__ == "__main__":
                 print(
                     f"[{client.ip}:{client.port}] [{time.strftime('%H:%M:%S')}] Wrong command!"
                 )
+
+        except ConnectionRefusedError as e:
+            print(f"Server with ip {client.ip} and port {client.port} not active.")
+            ip = input("Enter new IP: ")
+            port = input("Enter new port:")
+            client.ip = ip
+            client.port = port
+            client.server = ServerProxy(
+                            f"http://{client.ip}:{client.port}",
+                            transport=TimeoutTransport(timeout=100),
+                        )
 
         except Exception as e:
             print(f"[{client.ip}:{client.port}] [{time.strftime('%H:%M:%S')}] {e}!")

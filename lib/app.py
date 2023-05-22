@@ -19,6 +19,9 @@ class MessageQueue:
     
     def prepend(self, item: str):
         self.__queue.insert(0, item)
+
+    def pop(self) -> str:
+        return self.__queue.pop()
     
     def length(self) -> str:
         return str(len(self.__queue))

@@ -45,10 +45,10 @@ from lib.struct.response.response import (
 
 
 class RaftNode:
-    HEARTBEAT_INTERVAL   = 3
-    ELECTION_TIMEOUT_MIN = 8.0
-    ELECTION_TIMEOUT_MAX = 12.0
-    RPC_TIMEOUT          = 2
+    HEARTBEAT_INTERVAL   = 1
+    ELECTION_TIMEOUT_MIN = 2.0
+    ELECTION_TIMEOUT_MAX = 3.0
+    RPC_TIMEOUT          = 0.5
 
     class NodeType(Enum):
         LEADER    = 1
@@ -283,10 +283,10 @@ class RaftNode:
         return json.dumps(response, cls=ResponseEncoder)
 
     def log_replication(self):
-        print("Log Replication")
         self.beatTimer.reset()
 
         if len(self.cluster_addr_list)>0:
+            self.__print_log(f"Starting log replication")
             # Check whether commit index can be increased.
             if len(self.log)>0:
                 newCommitIdx = 0
@@ -319,6 +319,8 @@ class RaftNode:
                                     self.matchIdx[res.dest.port] = -1
                         else:
                             self.type = RaftNode.NodeType.FOLLOWER
+        else:
+            self.__print_log("Follower not found. Log replication will not run")
 
     def receiver_log_replication(self, json_request: str) -> str:
         print("Receiver replicate log...")

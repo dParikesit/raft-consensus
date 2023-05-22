@@ -75,7 +75,7 @@ class RaftNode:
         self.matchIdx:              Dict[Address, int] = {}
 
         # Follower properties
-        self.cdTimer:               CountdownTimer      = CountdownTimer(RaftNode.ELECTION_TIMEOUT_MIN, RaftNode.ELECTION_TIMEOUT_MAX, self.election_start)
+        self.cdTimer:               CountdownTimer      = CountdownTimer(self.election_start, intervalMin=RaftNode.ELECTION_TIMEOUT_MIN, intervalMax=RaftNode.ELECTION_TIMEOUT_MAX )
 
         self.__print_log("Server Start Time")
         if contact_addr is None:

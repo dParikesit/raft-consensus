@@ -7,6 +7,9 @@ class Address():
     
     def __str__(self):
         return f"{self.ip}:{self.port}"
+
+    def __repr__(self) -> str:
+        return self.__str__()
     
     def __iter__(self):
         return iter((self.ip, self.port))

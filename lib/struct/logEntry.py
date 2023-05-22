@@ -7,7 +7,6 @@ class LogEntryEncoder(JSONEncoder):
         if isinstance(o, LogEntry):
             return{
                 "term": o.term,
-                "idx": o.idx,
                 "clientId": o.clientId,
                 "operation": o.operation,
                 "reqNum": o.reqNum,
@@ -17,17 +16,18 @@ class LogEntryEncoder(JSONEncoder):
 
 class LogEntry():
     # Ini boleh diganti. Aku belom kepikiran log nya mau diisi apa aja
-    __slots__ = ('term', 'idx', 'clientId', 'operation', 'reqNum', 'result')
+    __slots__ = ('term', 'isOp', 'clientId', 'operation', 'reqNum', 'result')
 
     # term isinya term sekarang
+    # isOp boolean, if true then client operation, else add server
     # clientId isinya id client. berguna buat nanti exactly once
     # operation ya isinya operation
     # reqNum isinya reqNum. Buat exactly once juga
     # result isinya hasil operasi
 
-    def __init__(self, term: int, idx: int, clientId: str, operation: str, reqNum: int, result:  Optional[str]) -> None:
+    def __init__(self, term: int, isOp: bool, clientId: str, operation: str, reqNum: int, result:  Optional[str]) -> None:
         self.term: int              = term
-        self.idx: int               = idx
+        self.isOp: bool             = isOp
         self.clientId: str          = clientId
         self.operation: str         = operation
         self.reqNum: int            = reqNum

@@ -15,7 +15,7 @@ class ResponseEncoder(JSONEncoder):
         if isinstance(o, LogEntry):
             return{
                 "term": o.term,
-                "idx": o.idx,
+                "isOp": o.isOp,
                 "clientId": o.clientId,
                 "operation": o.operation,
                 "reqNum": o.reqNum,
@@ -77,20 +77,21 @@ class ResponseDecoder(JSONDecoder):
             if obj["type"] == 'RequestVoteResponse':
                 return RequestVoteResponse(obj["term"], obj["voteGranted"])
             if obj["type"] == 'MembershipResponse':
-                return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]), [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]], [Address(elem['ip'], elem['port']) for elem in obj["cluster_addr_list"]])
+                return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]), [LogEntry(elem["term"], elem["isOp"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]], [Address(elem['ip'], elem['port']) for elem in obj["cluster_addr_list"]])
             if obj["type"] == 'ClientRequestResponse':
                 return ClientRequestResponse(obj["requestNumber"], obj["status"], obj["result"])
             if obj["type"] == 'ClientRedirectResponse':
                 return ClientRedirectResponse(obj["status"], obj["address"])
             if obj["type"] == 'ClientRequestLogResponse':
-                return ClientRequestLogResponse(obj["status"], obj["requestNumber"], [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]])
+                return ClientRequestLogResponse(obj["status"], obj["requestNumber"], [LogEntry(elem["term"], elem["isOp"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]])
         return obj
 
 class Response:
-    __slots__ = ('type')
+    __slots__ = ('type', 'dest')
 
     def __init__(self, type: str) -> None:
         self.type: str = type
+        self.dest: Optional[Address] = None
 
     def __str__(self) -> str:
         return dumps(self, indent=2, cls=ResponseEncoder)

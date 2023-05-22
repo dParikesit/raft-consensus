@@ -6,6 +6,7 @@ from enum import Enum
 from threading import Thread
 from typing import AbstractSet, Any, List, MutableSet, Optional, Tuple, Dict
 from xmlrpc.client import ServerProxy
+from lib.app import MessageQueue
 
 from lib.timer.CountdownTimer import CountdownTimer
 from lib.struct.address import Address
@@ -50,10 +51,10 @@ class RaftNode:
         CANDIDATE = 2
         FOLLOWER  = 3
 
-    def __init__(self, application: Any, addr: Address, contact_addr: Optional[Address] = None):
+    def __init__(self, application: MessageQueue, addr: Address, contact_addr: Optional[Address] = None):
         socket.setdefaulttimeout(RaftNode.RPC_TIMEOUT)
         # Self properties
-        self.app:                   Any                 = application
+        self.app:                   MessageQueue        = application
         self.type:                  RaftNode.NodeType   = RaftNode.NodeType.FOLLOWER
         self.address:               Address             = addr
         self.cluster_leader_addr:   Optional[Address]   = None
@@ -116,7 +117,7 @@ class RaftNode:
                     prevLogTerm = -1
 
                     if (nextIdx > 1):
-                        prevLogIdx = self.log[len(self.log) - 1].idx
+                        prevLogIdx = len(self.log)
                         prevLogTerm = self.log[len(self.log) - 1].term
                     currentTerm = self.currentTerm
                     entries: AppendEntriesBody = AppendEntriesBody(currentTerm, self.address, prevLogIdx, prevLogTerm, [], nextIdx)
@@ -152,6 +153,7 @@ class RaftNode:
             rpc_function = getattr(node, req.func_name)
             result = rpc_function(json_request)
             response     = json.loads(result, cls=ResponseDecoder)
+            response.dest= req.dest
             self.__print_log(str(response))
             return response
         except Exception as error:
@@ -188,7 +190,7 @@ class RaftNode:
     
     async def __coldnew_log_sync(self, cluster_addr_new_list: list):
         # Try to replicate Cold,new log on C_old
-        log_entry = LogEntry(self.currentTerm, self.commitIdx+1, str(self.address), 
+        log_entry = LogEntry(self.currentTerm, False, str(self.address), 
                              "Cold,new", 1, None)
         self.log.append(log_entry)
         self.lastApplied += 1
@@ -204,7 +206,7 @@ class RaftNode:
 
                 if (nextIdx > 1):
                     nextIdx -= 1
-                    prevLogIdx = self.log[nextIdx - 1].idx
+                    prevLogIdx = nextIdx
                     prevLogTerm = self.log[nextIdx - 1].term
 
                 entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, self.address, prevLogIdx, 
@@ -243,7 +245,7 @@ class RaftNode:
 
             if (nextIdx > 1):
                 nextIdx -= 1
-                prevLogIdx = self.log[nextIdx - 1].idx
+                prevLogIdx = len(self.log)
                 prevLogTerm = self.log[nextIdx - 1].term
             entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, self.address, prevLogIdx, 
                                                                     prevLogTerm, self.log, nextIdx, cluster_addr_new_list)
@@ -292,7 +294,7 @@ class RaftNode:
     
     async def __cnew_log_sync(self, cluster_addr_new_list: list):
         # Try to replicate Cnew log on C_new
-        log_entry = LogEntry(self.currentTerm, self.commitIdx+1, str(self.address), 
+        log_entry = LogEntry(self.currentTerm, False, str(self.address), 
                              "Cnew", 1, None)
         self.log.append(log_entry)
         nextIdx = len(self.log)
@@ -310,7 +312,7 @@ class RaftNode:
 
             if (nextIdx > 1):
                 nextIdx -= 1
-                prevLogIdx = self.log[nextIdx - 1].idx
+                prevLogIdx = len(self.log)
                 prevLogTerm = self.log[nextIdx - 1].term
 
             entries = AppendEntriesMembershipBody(self.currentTerm, self.address, prevLogIdx, 
@@ -506,7 +508,7 @@ class RaftNode:
         return json.dumps(response, cls=ResponseEncoder)
 
     # Client RPCs
-    def execute(self, json_request: str) -> str:
+    async def execute(self, json_request: str) -> str:
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
         print("Request from Client\n", request, "\n")
 
@@ -515,7 +517,9 @@ class RaftNode:
             if self.address == self.cluster_leader_addr:
                 response = ClientRequestResponse(request.body.requestNumber, "success", "result")
                 print("Response to Client", response, "\n")
-                self.log_replication(request)
+                log_entry = LogEntry(self.currentTerm, True, request.body.clientID, request.body.command, request.body.requestNumber, None)
+                self.log.append(log_entry)
+                await self.log_replication()
                 print("LOG REPLICATION")
                 # time.sleep(11)
             else:
@@ -527,7 +531,7 @@ class RaftNode:
 
         return json.dumps(response, cls=ResponseEncoder)
 
-    def request_log(self, json_request: str):
+    def request_log(self, json_request: str) -> str:
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
         print("Request from Client\n", request, "\n")
 
@@ -545,136 +549,83 @@ class RaftNode:
 
         return json.dumps(response, cls=ResponseEncoder)
 
-    def log_replication(self, cliReq: ClientRequest):
+    async def log_replication(self):
         print("Log Replication")
 
-        log_entry = LogEntry(self.currentTerm, self.commitIdx + 1, cliReq.body.clientID, 
-                             cliReq.body.command, cliReq.body.requestNumber, None)
-        self.log.append(log_entry)
-
-        self.lastApplied += 1
-        # self.nextIdx['nextIdx'] = len(self.log)
-        nextIdx = len(self.log)
-
-        if (len(self.cluster_addr_list) > 0):
-            ack_array = [False] * len(self.cluster_addr_list)
-
-            while sum(bool(x) for x in ack_array) < (len(self.cluster_addr_list) // 2) + 1:
-                nextIdx = 0
-                prevLogIdx = -1
-                prevLogTerm = -1
-                
-                if (nextIdx > 1):
-                    nextIdx -= 1
-                    prevLogIdx = self.log[nextIdx - 1].idx
-                    prevLogTerm = self.log[nextIdx - 1].term
-
-                entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, self.address, prevLogIdx, 
-                                                            prevLogTerm, self.log, nextIdx)
-
-                print("Sending log replication request to all nodes...")
-                print("AppendEntriesBody", entries, "\n")
-                
-                for i in range(len(self.cluster_addr_list)):
-                    if ack_array[i] == False:
-                        request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
-                        response: AppendEntriesResponse = self.__send_request(request)
-                        if response.success == True:
-                            ack_array[i] = True
-                            self.nextIdx[self.cluster_addr_list[i]] = nextIdx
-
-            print("Log replication success...")
-            print("Committing log...")
-            
-            self.update_commit_log()
-            self.commitIdx += 1
-            
-            print("Leader Log: ", self.log, "\n")
-            print("Sending response to client...")
-
-            entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, self.address, None, None, self.log, self.commitIdx)
-
-            for i in range(len(self.cluster_addr_list)):
-                if ack_array[i] == True:
-                    request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_commit_log", entries)
-                    response: AppendEntriesResponse = self.__send_request(request)
+        # Check whether commit index can be appended.
+        if len(self.log)>0:
+            newCommitIdx = 0
+            for idx in range(len(self.log)-1, self.commitIdx, -1):
+                count = len(dict(filter(lambda val: val[1]-1>= idx, self.nextIdx.items())))
+                if count >= (len(self.cluster_addr_list)+1)//2 + 1:
+                    newCommitIdx = idx
+                    break
+            for idx in range(self.commitIdx, newCommitIdx+1):
+                if self.log[idx].operation.startswith('enqueue') or self.log[idx].operation.startswith('dequeue'):
+                    self.commit_entry(idx)
+                    self.lastApplied +=1
+            self.commitIdx = newCommitIdx
         
-        else:
-            print("Log replication success...")
-            print("Committing log...")
-            self.update_commit_log()
-            self.commitIdx += 1
-            print("Leader Log: ", self.log, "\n")
+        # Send append entries that append AND commit logs. Remember that not all server will return (caused of network problem), hence the code above is possible
+        tasks = []
+        for addr in self.cluster_addr_list:
+            request = AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr]-1].term, self.log[self.nextIdx[addr]:], self.commitIdx))
+            task = asyncio.ensure_future(self.__send_request_async(request))
+            tasks.append(task)
+        responses: List[AppendEntriesResponse | None] = await asyncio.gather(*tasks)
+        for res in responses:
+            if res:
+                if res.term <= self.currentTerm:
+                    self.currentTerm=res.term
+                    if res.dest:
+                        if res.success:
+                            self.nextIdx[res.dest] = len(self.log)
+                            self.matchIdx[res.dest] = self.commitIdx
+                        else:
+                            self.nextIdx[res.dest] = 0
+                            self.matchIdx[res.dest] = 0
+                else:
+                    self.type = RaftNode.NodeType.FOLLOWER
 
-
-
-    def receiver_replicate_log(self, json_request: str):
+    async def receiver_log_replication(self, json_request: str) -> str:
         print("Receiver replicate log...")
         self.cdTimer.reset()
         request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
-        print("Request from Leader\n", request, "\n")
-        if len(self.log) == 0:
-            prevLogIdx = -1
-            prevLogTerm = -1
-        else:
-            #print("Log: ", self.log, "\n")
-            prevLogIdx = self.log[len(self.log) - 1].idx
-            prevLogTerm = self.log[len(self.log) - 1].term
-        print(request.body.term, self.currentTerm, prevLogIdx,  request.body.prevLogIdx, prevLogTerm, request.body.prevLogTerm)
-        if(request.body.term > self.currentTerm):
-            self.currentTerm = request.body.term
-            self.votedFor = None
-            response = AppendEntriesResponse(self.currentTerm, True)
-            return json.dumps(response, cls=ResponseEncoder)
-        elif (request.body.term == self.currentTerm):
-            if(request.body.entries == []):
-                response = AppendEntriesResponse(self.currentTerm, True)
-                return json.dumps(response, cls=ResponseEncoder)
-            if (prevLogIdx == request.body.prevLogIdx and prevLogTerm == request.body.prevLogTerm):
-                print("Request from Leader:\n", request, "\n")
+        response: AppendEntriesResponse = AppendEntriesResponse(self.currentTerm, False)
 
-                for i in range(request.body.leaderCommit, len(request.body.entries)):
-                    self.log.append(request.body.entries[i])
-                    self.lastApplied += 1
-                    if (request.body.entries[i].result != None):
-                        self.commitIdx += 1
-                         
-                print("Success append log to follower...")
-                print("Follower Log: ", self.log, "\n")
-                response = AppendEntriesResponse(self.currentTerm, True)
-                return json.dumps(response, cls=ResponseEncoder)
-            else:
-                response = AppendEntriesResponse(self.currentTerm, False)
-                return json.dumps(response, cls=ResponseEncoder)
-        else:
-            response = AppendEntriesResponse(self.currentTerm, False)
+        if(request.body.term < self.currentTerm):
+            # Term is greater than leader, this indicates this node is more updated
             return json.dumps(response, cls=ResponseEncoder)
-    
-    def receiver_commit_log(self, json_request: str):
-        print("Receiver commit log...")
-        request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
+        
+        if(self.log[request.body.prevLogIdx].term != request.body.term):
+            # Incorrect previous log, reset log and MQ
+            self.log = []
+            self.app.clear()
+            return json.dumps(response, cls=ResponseEncoder)
+        
+        if(request.body.prevLogIdx < len(self.log)-1):
+            # Delete unused log (different tail than leader)
+            for idx in range(len(self.log)-1, request.body.prevLogIdx):
+                self.undo_entry(idx)
+            del self.log[request.body.prevLogIdx+1:]
+        
+        # Append entries
+        self.log += request.body.entries
+        response.success = True
 
+        # Commit until leader's commitIdx
+        for idx in range(self.commitIdx, request.body.leaderCommit+1):
+            self.commit_entry(idx)
+            self.lastApplied +=1
         self.commitIdx = request.body.leaderCommit
 
-        print("Committing log...")
-        self.update_commit_log()
-        print("Follower Log: ", self.log, "\n")
-
-        response = AppendEntriesResponse(self.currentTerm, True)
         return json.dumps(response, cls=ResponseEncoder)
 
-    def update_commit_log(self):
-        results = []
-        for i in range(len(self.log) - 1):
-            if self.log[i].operation == "dequeue":
-                if (len(results) > 0):
-                    results.pop(0)
-            else:
-                results.append(self.log[i].operation[8:-1])
-        if (self.log[len(self.log) - 1].operation == "dequeue"):
-            if len(results) > 0:
-                self.log[len(self.log) -1].result = results[0]
-            else:  
-                self.log[len(self.log) -1].result = "-1"
-        else:
-            self.log[len(self.log) -1].result = str(len(results) + 1)
+    def commit_entry(self, idx: int):
+        # TODO Check duplicate and operation type
+        # Kalo sukses panggil bawah ini
+        self.app.apply(self.log[idx].operation)
+    
+    def undo_entry(self, idx: int):
+        # TODO Cek undo dan duplicate
+        pass

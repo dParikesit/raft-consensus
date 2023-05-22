@@ -7,6 +7,7 @@ class CountdownTimer():
     def __init__(self, func, intervalMin=None, intervalMax=None, interval = None):
         self._intervalMin: Optional[float] = intervalMin
         self._intervalMax: Optional[float] = intervalMax
+        self._interval: float = random.uniform(0.0, 1.0)
         
         if interval:
             self._interval = interval

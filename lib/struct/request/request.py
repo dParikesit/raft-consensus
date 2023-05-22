@@ -17,7 +17,7 @@ class RequestEncoder(JSONEncoder):
         if isinstance(o, LogEntry):
             return{
                 "term": o.term,
-                "idx": o.idx,
+                "isOp": o.isOp,
                 "clientId": o.clientId,
                 "operation": o.operation,
                 "reqNum": o.reqNum,
@@ -71,7 +71,7 @@ class RequestDecoder(JSONDecoder):
     def object_hook(self, obj):
         if isinstance(obj, dict) and "type" in obj:
             if obj["type"] == 'AppendEntriesRequest':
-                return AppendEntriesRequest(obj["dest"], obj["func_name"], AppendEntriesBody(obj["body"]["term"], obj["body"]["leaderId"], obj["body"]["prevLogIdx"], obj["body"]["prevLogTerm"], [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["body"]["entries"]], obj["body"]["leaderCommit"]))
+                return AppendEntriesRequest(obj["dest"], obj["func_name"], AppendEntriesBody(obj["body"]["term"], obj["body"]["leaderId"], obj["body"]["prevLogIdx"], obj["body"]["prevLogTerm"], [LogEntry(elem["term"], elem["isOp"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["body"]["entries"]], obj["body"]["leaderCommit"]))
             if obj["type"] == 'AppendEntriesMembershipRequest':
                 return AppendEntriesMembershipRequest(
                     obj["dest"],
@@ -81,7 +81,7 @@ class RequestDecoder(JSONDecoder):
                         obj["body"]["leaderId"], 
                         obj["body"]["prevLogIdx"], 
                         obj["body"]["prevLogTerm"], 
-                        [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["body"]["entries"]], 
+                        [LogEntry(elem["term"], elem["isOp"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["body"]["entries"]], 
                         obj["body"]["leaderCommit"],
                         obj["body"]["cluster_addr_list"]
                     ),

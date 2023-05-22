@@ -37,7 +37,8 @@ class ResponseEncoder(JSONEncoder):
             return {
                 "type": o.type,
                 "status": o.status,
-                "address": o.address,
+                "leader": o.leader,
+                "cluster_addr_list": o.cluster_addr_list
             }
         if isinstance(o, ClientRequestResponse):
             return {
@@ -80,7 +81,7 @@ class ResponseDecoder(JSONDecoder):
             if obj["type"] == 'RequestVoteResponse':
                 return RequestVoteResponse(obj["term"], obj["voteGranted"])
             if obj["type"] == 'MembershipResponse':
-                return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]))
+                return MembershipResponse(obj["status"], Address(obj["leader"]["ip"], obj["leader"]["port"]), [Address(elem["ip"], elem["port"]) for elem in obj["cluster_addr_list"]])
             if obj["type"] == 'ClientRequestResponse':
                 return ClientRequestResponse(obj["requestNumber"], obj["status"], obj["result"])
             if obj["type"] == 'ClientRedirectResponse':
@@ -105,12 +106,13 @@ class Response:
         return self.__str__()
 
 class MembershipResponse(Response):
-    __slots__ = ('status', 'address', 'log', 'cluster_addr_list')
+    __slots__ = ('status', 'leader', 'log', 'cluster_addr_list')
 
-    def __init__(self, status: str, address: Address) -> None:
+    def __init__(self, status: str, leader: Address, cluster: List[Address] = []) -> None:
         super().__init__('MembershipResponse')
         self.status: str                        = status
-        self.address: Address                   = address
+        self.leader: Address                    = leader
+        self.cluster_addr_list: List[Address]   = cluster
 
 class AppendEntriesResponse(Response):
     __slots__ = ('term', 'success')

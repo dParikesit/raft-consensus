@@ -71,11 +71,12 @@ class RaftNode:
 
         # Leader properties (Not None if leader, else None)
         # self.nextIdx:               Optional[List[int]] = None
-        self.nextIdx:               Dict[Address, int] = {}
-        self.matchIdx:              Dict[Address, int] = {}
+        self.nextIdx:               Dict[int, int]  = {}
+        self.matchIdx:              Dict[int, int]  = {}
+        self.beatTimer:             CountdownTimer      = CountdownTimer(self.log_replication, interval=RaftNode.HEARTBEAT_INTERVAL, repeat=True)
 
         # Follower properties
-        self.cdTimer:               CountdownTimer      = CountdownTimer(self.election_start, intervalMin=RaftNode.ELECTION_TIMEOUT_MIN, intervalMax=RaftNode.ELECTION_TIMEOUT_MAX )
+        self.cdTimer:               CountdownTimer      = CountdownTimer(self.election_start, intervalMin=RaftNode.ELECTION_TIMEOUT_MIN, intervalMax=RaftNode.ELECTION_TIMEOUT_MAX)
 
         self.__print_log("Server Start Time")
         if contact_addr is None:
@@ -95,53 +96,18 @@ class RaftNode:
         self.cluster_leader_addr = self.address
         if self.address in self.cluster_addr_list:
             self.cluster_addr_list.remove(self.address)
-        
-        request = {
-            "cluster_leader_addr": self.address
-        }
-        self.heartbeat_thread = Thread(target=asyncio.run, daemon=True, args=[self.__leader_heartbeat()])
-        self.heartbeat_thread.start()
-
-    async def __leader_heartbeat(self):
-        while True:
-            self.__print_log("[Leader] Sending heartbeat...")
-            # self.cluster_addr_list = self.cluster_addr_new_list.copy()
-            if(len(self.cluster_addr_list) > 0):
-                for i in range(len(self.cluster_addr_list)):
-                    if(self.cluster_addr_list[i] not in self.nextIdx):
-                        self.nextIdx[self.cluster_addr_list[i]] = 0
-
-                    nextIdx = self.nextIdx[self.cluster_addr_list[i]]
-                    prevLogIdx = -1
-                    prevLogTerm = -1
-
-                    if (nextIdx > 1):
-                        prevLogIdx = len(self.log)
-                        prevLogTerm = self.log[len(self.log) - 1].term
-                    currentTerm = self.currentTerm
-                    entries: AppendEntriesBody = AppendEntriesBody(currentTerm, self.address, prevLogIdx, prevLogTerm, [], nextIdx)
-                    try:
-                        request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
-                        await asyncio.ensure_future(self.__send_request_async(request))
-                        self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} success...")
-                    except Exception as e:
-                        print(e)
-                        self.__print_log(f"Error: {e}")
-                        self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} died...")
-                        self.__print_log(f"Node {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} will be deleted...")
-                        self.cluster_addr_list.pop(i)
-            await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
+        self.beatTimer.start()
 
     def __try_to_apply_membership(self, contact_addr: Address):
         redirected_addr = contact_addr
         request = AddressRequest(contact_addr, "apply_membership", self.address)
         response = MembershipResponse("redirected", contact_addr)
         while response.status != "success":
-            request         = AddressRequest(response.address, "apply_membership", self.address)
+            request         = AddressRequest(response.leader, "apply_membership", self.address)
             response        = self.__retry_request_async(request)
-        self.log                 = response.log
+        self.cluster_leader_addr = response.leader
         self.cluster_addr_list   = response.cluster_addr_list
-        self.cluster_leader_addr = redirected_addr
+        print("Join successful")
 
     async def __send_request_async(self, req: Request) -> Any:
         try:
@@ -158,7 +124,8 @@ class RaftNode:
             return None
         
     def __retry_request_async(self, req: Request) -> Any:
-        while True:
+        response = None
+        while not response:
             try:
                 node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
                 json_request = json.dumps(req, cls=RequestEncoder)
@@ -182,41 +149,32 @@ class RaftNode:
         return response
 
     # Inter-node RPCs
-    def heartbeat(self, json_request: str) -> str:
-        # TODO : Implement heartbeat
-        self.cdTimer.reset()
-        request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
-
-        if not self.cluster_leader_addr:
-            self.cluster_leader_addr = request.body.leaderId
-
-        if self.cluster_leader_addr and request.body.leaderId != self.cluster_leader_addr:
-            self.cluster_addr_list.append(self.cluster_leader_addr)
-            self.cluster_leader_addr = request.body.leaderId
-
-        response = AppendEntriesResponse(self.currentTerm, True)
-        return json.dumps(response, cls=ResponseEncoder)
-
     def apply_membership(self, json_request: str) -> str:
         request: AddressRequest = json.loads(json_request, cls=RequestDecoder)
+
+        if request.body in self.cluster_addr_list:
+            response = MembershipResponse("success", self.address, self.cluster_addr_list)
+            return json.dumps(response, cls=ResponseEncoder)
 
         if self.cluster_leader_addr and self.address != self.cluster_leader_addr:
             response = MembershipResponse("failed", self.cluster_leader_addr)
             return json.dumps(response, cls=ResponseEncoder)
         
         print("Apply membership for node", request.body)
-        self.cluster_addr_list.append(request.body)
         
         for addr in self.cluster_addr_list:
-            req = ConfigChangeRequest(addr, "update_addr_list", self.cluster_addr_list)
-            res = ConfigChangeResponse(False)
-            while not res.success:
-                res = self.__retry_request_async(req)
-
-        self.nextIdx[request.body] = 0
-        self.matchIdx[request.body] = -1
+            print(self.cluster_addr_list)
+            if addr != request.body:
+                req = ConfigChangeRequest(addr, "update_addr_list", self.cluster_addr_list)
+                res = ConfigChangeResponse(False)
+                while not res.success:
+                    res = self.__retry_request_async(req)
             
-        response = MembershipResponse("success", self.address)
+        self.cluster_addr_list.append(request.body)
+        self.nextIdx[request.body.port] = 0
+        self.matchIdx[request.body.port] = -1
+
+        response = MembershipResponse("success", self.address, self.cluster_addr_list)
         return json.dumps(response, cls=ResponseEncoder)
     
     def update_addr_list(self, json_request:str) -> str:
@@ -256,10 +214,8 @@ class RaftNode:
             self.cluster_leader_addr = self.address
             self.cluster_addr_list.remove(self.address)
             for addr in self.cluster_addr_list:
-                self.nextIdx[addr] = 0
-                self.matchIdx[addr] = -1
-            self.heartbeat_thread = Thread(target=asyncio.run, daemon=True, args=[self.__leader_heartbeat()])
-            self.heartbeat_thread.start()
+                self.nextIdx[addr.port] = 0
+                self.matchIdx[addr.port] = -1
         else:
             self.type = RaftNode.NodeType.FOLLOWER
             self.cdTimer.reset()
@@ -333,41 +289,47 @@ class RaftNode:
 
     async def log_replication(self):
         print("Log Replication")
+        self.beatTimer.reset()
 
-        # Check whether commit index can be increased.
-        if len(self.log)>0:
-            newCommitIdx = 0
-            for idx in range(len(self.log)-1, self.commitIdx, -1):
-                count = len(dict(filter(lambda val: val[1]-1>= idx, self.nextIdx.items())))
-                if count >= (len(self.cluster_addr_list)+1)//2 + 1:
-                    newCommitIdx = idx
-                    break
-            for idx in range(self.commitIdx, newCommitIdx+1):
-                if self.log[idx].operation.startswith('enqueue') or self.log[idx].operation.startswith('dequeue'):
-                    self.commit_entry(idx)
-                    self.lastApplied +=1
-            self.commitIdx = newCommitIdx
-        
-        # Send append entries that append AND commit logs. Remember that not all server will return (caused of network problem), hence the not all log and commit index in follower will be updated
-        tasks = []
-        for addr in self.cluster_addr_list:
-            request = AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr]-1].term, self.log[self.nextIdx[addr]:], self.commitIdx))
-            task = asyncio.ensure_future(self.__send_request_async(request))
-            tasks.append(task)
-        responses: List[AppendEntriesResponse | None] = await asyncio.gather(*tasks)
-        for res in responses:
-            if res:
-                if res.term <= self.currentTerm:
-                    self.currentTerm=res.term
-                    if res.dest:
-                        if res.success:
-                            self.nextIdx[res.dest] = len(self.log)
-                            self.matchIdx[res.dest] = self.commitIdx
-                        else:
-                            self.nextIdx[res.dest] = 0
-                            self.matchIdx[res.dest] = -1
-                else:
-                    self.type = RaftNode.NodeType.FOLLOWER
+        print(self.nextIdx)
+        print(self.cluster_addr_list)
+
+        if len(self.cluster_addr_list)>0:
+            # Check whether commit index can be increased.
+            if len(self.log)>0:
+                newCommitIdx = 0
+                for idx in range(len(self.log)-1, self.commitIdx, -1):
+                    count = len(dict(filter(lambda val: val[1]-1>= idx, self.nextIdx.items())))
+                    if count >= (len(self.cluster_addr_list)+1)//2 + 1:
+                        newCommitIdx = idx
+                        break
+                for idx in range(self.commitIdx, newCommitIdx+1):
+                    if self.log[idx].operation.startswith('enqueue') or self.log[idx].operation.startswith('dequeue'):
+                        self.commit_entry(idx)
+                        self.lastApplied +=1
+                self.commitIdx = newCommitIdx
+            
+            # Send append entries that append AND commit logs. Remember that not all server will return (caused of network problem), hence the not all log and commit index in follower will be updated
+            tasks = []
+            
+            for addr in self.cluster_addr_list:
+                request = AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr.port]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr.port]-1].term, self.log[self.nextIdx[addr.port]:], self.commitIdx))
+                task = asyncio.ensure_future(self.__send_request_async(request))
+                tasks.append(task)
+            responses: List[AppendEntriesResponse | None] = await asyncio.gather(*tasks)
+            for res in responses:
+                if res:
+                    if res.term <= self.currentTerm:
+                        self.currentTerm=res.term
+                        if res.dest:
+                            if res.success:
+                                self.nextIdx[res.dest.port] = len(self.log)
+                                self.matchIdx[res.dest.port] = self.commitIdx
+                            else:
+                                self.nextIdx[res.dest.port] = 0
+                                self.matchIdx[res.dest.port] = -1
+                    else:
+                        self.type = RaftNode.NodeType.FOLLOWER
 
     async def receiver_log_replication(self, json_request: str) -> str:
         print("Receiver replicate log...")
@@ -410,7 +372,7 @@ class RaftNode:
             # Loop dari (idx - 1) sampe 0
             counter = idx
             while counter >= 0:
-                if(self.log[idx].clientId == self.log[counter].clientID and self.log[idx].reqNum == self.log[counter].reqNum and self.log[idx].operation == self.log[counter].operation):
+                if(self.log[idx].clientId == self.log[counter].clientId and self.log[idx].reqNum == self.log[counter].reqNum and self.log[idx].operation == self.log[counter].operation):
                     # clientID, reqNum, operation sama -> duplicate -> update result, don't apply
                     self.log[idx].result = self.log[counter].result
                     break
@@ -432,7 +394,7 @@ class RaftNode:
             # Loop dari (idx - 1) sampe 0
             counter = idx
             while counter >= 0:
-                if(self.log[idx].clientId == self.log[counter].clientID and self.log[idx].reqNum == self.log[counter].reqNum and self.log[idx].operation == self.log[counter].operation):
+                if(self.log[idx].clientId == self.log[counter].clientId and self.log[idx].reqNum == self.log[counter].reqNum and self.log[idx].operation == self.log[counter].operation):
                     # clientID, reqNum, operation sama -> duplicate -> delete log, don't pop or prepend
                     break
                 else:
@@ -440,14 +402,16 @@ class RaftNode:
 
             if (counter < 0):
                 # No duplicate
-                if(self.log[idx].operation == "dequeue"):
-                    self.app.prepend(self.log[idx].result)
-                else:
-                    self.app.pop()
+                if self.log[idx].result:
+                    if(self.log[idx].operation == "dequeue"):
+                        self.app.prepend(self.log[idx].result) # type: ignore
+                    else:
+                        self.app.pop()
 
         else:
             # First log, no duplicate possible
-            if(self.log[idx].operation == "dequeue"):
-                self.app.prepend(self.log[idx].result)
-            else:
-                self.app.pop()
+            if self.log[idx].result:
+                if(self.log[idx].operation == "dequeue"):
+                    self.app.prepend(self.log[idx].result) # type: ignore
+                else:
+                    self.app.pop()

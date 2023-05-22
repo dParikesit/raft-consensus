@@ -4,9 +4,10 @@ import asyncio
 from typing import Optional
 
 class CountdownTimer():
-    def __init__(self, func, intervalMin=None, intervalMax=None, interval = None):
+    def __init__(self, func, intervalMin=None, intervalMax=None, interval = None, repeat=False):
         self._intervalMin: Optional[float] = intervalMin
         self._intervalMax: Optional[float] = intervalMax
+        self.repeat: bool = repeat
         self._interval: float = random.uniform(0.0, 1.0)
         
         if interval:
@@ -35,4 +36,7 @@ class CountdownTimer():
 
     def handler(self):
         asyncio.run(self._func())
+        if self.repeat:
+            self._thread = threading.Timer(self._interval, self.handler)
+            self._thread.start()
         # self._func()

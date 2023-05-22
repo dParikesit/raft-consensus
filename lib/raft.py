@@ -216,6 +216,8 @@ class RaftNode:
             self.cdTimer.reset()
     
     def election_vote(self, json_request: str) -> str:
+        self.type = RaftNode.NodeType.FOLLOWER
+        self.cdTimer.reset()
         request: RequestVoteRequest = json.loads(json_request, cls=RequestDecoder)
         response = RequestVoteResponse(self.currentTerm, False)
 

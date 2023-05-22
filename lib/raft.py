@@ -315,22 +315,25 @@ class RaftNode:
             # Send append entries that append AND commit logs. Remember that not all server will return (caused of network problem), hence the not all log and commit index in follower will be updated
 
             with ThreadPoolExecutor() as executor:
-                futures = [executor.submit(self.__send_request, AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr.port]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr.port]-1].term, self.log[self.nextIdx[addr.port]:], self.commitIdx))) for addr in self.cluster_addr_list]
-                for future in as_completed(futures):
-                    res: AppendEntriesResponse | None = future.result()
-                    if res:
-                        if res.term <= self.currentTerm:
-                            # self.currentTerm=res.term
-                            if res.dest:
-                                if res.success:
-                                    self.nextIdx[res.dest.port] = len(self.log)
-                                    self.matchIdx[res.dest.port] = self.commitIdx
-                                else:
-                                    self.nextIdx[res.dest.port] = 0
-                                    self.matchIdx[res.dest.port] = -1
-                        else:
-                            self.currentTerm=res.term
-                            self.type = RaftNode.NodeType.FOLLOWER
+                try:
+                    futures = [executor.submit(self.__send_request, AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr.port]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr.port]-1].term, self.log[self.nextIdx[addr.port]:], self.commitIdx))) for addr in self.cluster_addr_list]
+                    for future in as_completed(futures):
+                        res: AppendEntriesResponse | None = future.result()
+                        if res:
+                            if res.term <= self.currentTerm:
+                                # self.currentTerm=res.term
+                                if res.dest:
+                                    if res.success:
+                                        self.nextIdx[res.dest.port] = len(self.log)
+                                        self.matchIdx[res.dest.port] = self.commitIdx
+                                    else:
+                                        self.nextIdx[res.dest.port] = 0
+                                        self.matchIdx[res.dest.port] = -1
+                            else:
+                                self.currentTerm=res.term
+                                self.type = RaftNode.NodeType.FOLLOWER
+                except Exception as error:
+                    self.__print_log(str(error))
             
         else:
             self.__print_log("Follower not found. Log replication will not run")

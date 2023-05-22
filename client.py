@@ -51,7 +51,10 @@ class Client:
     def __print_response(self, res: Response):
         # Response success or failed
         if isinstance(res, ClientRequestResponse):
-            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) {res.status}!")
+            if(res.status == "success"):
+                print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) {res.status}!")
+            else:
+                print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) received, but not committed yet!")
 
         # Response redirect
         if isinstance(res, ClientRedirectResponse):
@@ -212,10 +215,13 @@ if __name__ == "__main__":
             port = input("Enter new port:")
             client.ip = ip
             client.port = port
-            client.server = ServerProxy(
-                            f"http://{client.ip}:{client.port}",
-                            transport=TimeoutTransport(timeout=100),
-                        )
+            client.server = ServerProxy( f"http://{client.ip}:{client.port}", transport=TimeoutTransport(timeout=100))
+            if re.match(patternEnq, value) or value == "dequeue":
+                param = value
+                requestNumber += 1
+                client.execute(param, requestNumber)
+            elif value == "log":
+                client.request_log(requestNumber)
 
         except Exception as e:
             print(f"[{client.ip}:{client.port}] [{time.strftime('%H:%M:%S')}] {e}!")

@@ -8,6 +8,7 @@ from typing import AbstractSet, Any, List, MutableSet, Optional, Tuple, Dict
 from xmlrpc.client import ServerProxy
 from lib.app import MessageQueue
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
 
 from lib.timer.CountdownTimer import CountdownTimer
 from lib.struct.address import Address
@@ -97,6 +98,9 @@ class RaftNode:
         self.cluster_leader_addr = self.address
         if self.address in self.cluster_addr_list:
             self.cluster_addr_list.remove(self.address)
+        
+        # self.heartbeat_thread = Thread(target=asyncio.run, daemon=True, args=[self.log_replication()])
+        # self.heartbeat_thread.start()
         self.beatTimer.start()
 
     def __try_to_apply_membership(self, contact_addr: Address):
@@ -199,7 +203,7 @@ class RaftNode:
             for addr in self.cluster_addr_list:
                 if addr != self.address:
                     request = RequestVoteRequest(addr, "election_vote", RequestVoteBody(self.currentTerm, self.address, len(self.log), self.log[-1].term if len(self.log)>0 else -1))
-                    futures.append(executor.submit(self.__send_request(request)))
+                    futures.append(executor.submit(self.__send_request, request))
             for future in as_completed(futures):
                 res: RequestVoteResponse | None = future.result()
                 if res:
@@ -310,39 +314,40 @@ class RaftNode:
             
             # Send append entries that append AND commit logs. Remember that not all server will return (caused of network problem), hence the not all log and commit index in follower will be updated
 
-            # with ThreadPoolExecutor() as executor:
-            #     futures = [executor.submit(self.__send_request(AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr.port]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr.port]-1].term, self.log[self.nextIdx[addr.port]:], self.commitIdx)))) for addr in self.cluster_addr_list]
-            #     for future in as_completed(futures):
-            #         res: AppendEntriesResponse | None = future.result()
-            #         if res:
-            #             if res.term <= self.currentTerm:
-            #                 self.currentTerm=res.term
-            #                 if res.dest:
-            #                     if res.success:
-            #                         self.nextIdx[res.dest.port] = len(self.log)
-            #                         self.matchIdx[res.dest.port] = self.commitIdx
-            #                     else:
-            #                         self.nextIdx[res.dest.port] = 0
-            #                         self.matchIdx[res.dest.port] = -1
-            #             else:
-            #                 self.type = RaftNode.NodeType.FOLLOWER
+            with ThreadPoolExecutor() as executor:
+                futures = [executor.submit(self.__send_request(AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr.port]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr.port]-1].term, self.log[self.nextIdx[addr.port]:], self.commitIdx)))) for addr in self.cluster_addr_list]
+                for future in as_completed(futures):
+                    res: AppendEntriesResponse | None = future.result()
+                    if res:
+                        if res.term <= self.currentTerm:
+                            self.currentTerm=res.term
+                            if res.dest:
+                                if res.success:
+                                    self.nextIdx[res.dest.port] = len(self.log)
+                                    self.matchIdx[res.dest.port] = self.commitIdx
+                                else:
+                                    self.nextIdx[res.dest.port] = 0
+                                    self.matchIdx[res.dest.port] = -1
+                        else:
+                            self.type = RaftNode.NodeType.FOLLOWER
             
-            for addr in self.cluster_addr_list:
-                req = AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr.port]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr.port]-1].term, self.log[self.nextIdx[addr.port]:], self.commitIdx))
-                print(req)
-                res: AppendEntriesResponse | None = self.__send_request(req)
-                if res:
-                    if res.term <= self.currentTerm:
-                        self.currentTerm=res.term
-                        if res.dest:
-                            if res.success:
-                                self.nextIdx[res.dest.port] = len(self.log)
-                                self.matchIdx[res.dest.port] = self.commitIdx
-                            else:
-                                self.nextIdx[res.dest.port] = 0
-                                self.matchIdx[res.dest.port] = -1
-                    else:
-                        self.type = RaftNode.NodeType.FOLLOWER
+            # for addr in self.cluster_addr_list:
+            #     req = AppendEntriesRequest(addr, "receiver_log_replication", AppendEntriesBody(self.currentTerm, self.address, self.nextIdx[addr.port]-1, 0 if len(self.log)<=1 else self.log[self.nextIdx[addr.port]-1].term, self.log[self.nextIdx[addr.port]:], self.commitIdx))
+            #     print(req)
+            #     res: AppendEntriesResponse | None = self.__send_request(req)
+            #     if res:
+            #         if res.term <= self.currentTerm:
+            #             self.currentTerm=res.term
+            #             if res.dest:
+            #                 if res.success:
+            #                     self.nextIdx[res.dest.port] = len(self.log)
+            #                     self.matchIdx[res.dest.port] = self.commitIdx
+            #                 else:
+            #                     self.nextIdx[res.dest.port] = 0
+            #                     self.matchIdx[res.dest.port] = -1
+            #         else:
+            #             self.type = RaftNode.NodeType.FOLLOWER
+        # self.beatTimer.start()
 
     def receiver_log_replication(self, json_request: str) -> str:
         print("Receiver replicate log...")
@@ -350,7 +355,7 @@ class RaftNode:
         request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
         response: AppendEntriesResponse = AppendEntriesResponse(self.currentTerm, False)
 
-        print(request)
+        print(response)
 
         if(request.body.term < self.currentTerm):
             # Term is greater than leader, this indicates this node is more updated

@@ -112,18 +112,24 @@ class RaftNode:
         print("Join successful")
     
     def __send_request(self, req: Request) -> Any:
-        try:
-            node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
-            json_request = json.dumps(req, cls=RequestEncoder)
-            rpc_function = getattr(node, req.func_name)
-            result      = rpc_function(json_request)
-            response     = json.loads(result, cls=ResponseDecoder)
-            response.dest = req.dest
-            self.__print_log(str(response))
-            return response
-        except:
-            self.__print_log(f"{req.type} failed")
-            return None
+        node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
+        json_request = json.dumps(req, cls=RequestEncoder)
+        rpc_function = getattr(node, req.func_name)
+        result      = rpc_function(json_request)
+        response     = json.loads(result, cls=ResponseDecoder)
+        self.__print_log(str(response))
+        return response
+        # try:
+        #     node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
+        #     json_request = json.dumps(req, cls=RequestEncoder)
+        #     rpc_function = getattr(node, req.func_name)
+        #     result      = rpc_function(json_request)
+        #     response     = json.loads(result, cls=ResponseDecoder)
+        #     self.__print_log(str(response))
+        #     return response
+        # except:
+        #     self.__print_log(f"{req.type} failed")
+        #     return None
     
     def __retry_send_request(self, req: Request) -> Any:
         response = None
@@ -153,17 +159,18 @@ class RaftNode:
         
         print("Apply membership for node", request.body)
 
-        notDone = self.cluster_addr_list
-        
-        while len(notDone)>0:
-            with ThreadPoolExecutor() as executor:
-                futures = [executor.submit(self.__send_request(ConfigChangeRequest(addr, "update_addr_list", self.cluster_addr_list))) for addr in notDone]
-                for future in as_completed(futures):
-                    res: ConfigChangeResponse | None = future.result()
-                    if res and res.success and res.dest:
-                        notDone.remove(res.dest)
-            
         self.cluster_addr_list.append(request.body)
+
+        with ThreadPoolExecutor() as executor:
+            futures = []
+            for addr in self.cluster_addr_list:
+                if addr!=request.body:
+                    futures.append(executor.submit(self.__retry_send_request, ConfigChangeRequest(addr, "update_addr_list", self.cluster_addr_list + [request.body])))
+            for future in as_completed(futures):
+                res: ConfigChangeResponse | None = future.result()
+                if res and res.success:
+                    self.__print_log(f"{res.dest} has gotten the message")
+        
         self.nextIdx[request.body.port] = 0
         self.matchIdx[request.body.port] = -1
 
@@ -171,10 +178,11 @@ class RaftNode:
         return json.dumps(response, cls=ResponseEncoder)
     
     def update_addr_list(self, json_request:str) -> str:
+        self.cdTimer.reset()
         request: ConfigChangeRequest = json.loads(json_request, cls=RequestDecoder)
         self.cluster_addr_list = request.body
 
-        response = ConfigChangeResponse(True)
+        response = ConfigChangeResponse(request.dest, True)
         return json.dumps(response, cls=ResponseEncoder)
     
     def election_start(self):
@@ -322,7 +330,7 @@ class RaftNode:
         print("Receiver replicate log...")
         self.cdTimer.reset()
         request: AppendEntriesRequest = json.loads(json_request, cls=RequestDecoder)
-        response: AppendEntriesResponse = AppendEntriesResponse(self.currentTerm, False)
+        response: AppendEntriesResponse = AppendEntriesResponse(request.dest, self.currentTerm, False)
 
         if(request.body.term < self.currentTerm):
             # Term is greater than leader, this indicates this node is more updated

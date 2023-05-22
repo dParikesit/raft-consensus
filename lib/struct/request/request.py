@@ -71,10 +71,10 @@ class RequestDecoder(JSONDecoder):
     def object_hook(self, obj):
         if isinstance(obj, dict) and "type" in obj:
             if obj["type"] == 'AppendEntriesRequest':
-                return AppendEntriesRequest(obj["dest"], obj["func_name"], AppendEntriesBody(obj["body"]["term"], obj["body"]["leaderId"], obj["body"]["prevLogIdx"], obj["body"]["prevLogTerm"], [LogEntry(elem["term"], elem["isOp"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["body"]["entries"]], obj["body"]["leaderCommit"]))
+                return AppendEntriesRequest(Address(obj["dest"]["ip"], obj["dest"]["port"]), obj["func_name"], AppendEntriesBody(obj["body"]["term"], obj["body"]["leaderId"], obj["body"]["prevLogIdx"], obj["body"]["prevLogTerm"], [LogEntry(elem["term"], elem["isOp"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["body"]["entries"]], obj["body"]["leaderCommit"]))
             if obj["type"] == 'AppendEntriesMembershipRequest':
                 return AppendEntriesMembershipRequest(
-                    obj["dest"],
+                    Address(obj["dest"]["ip"], obj["dest"]["port"]),
                     obj["func_name"], 
                     AppendEntriesMembershipBody(
                         obj["body"]["term"], 
@@ -87,15 +87,15 @@ class RequestDecoder(JSONDecoder):
                     ),
                 )
             if obj["type"] == 'RequestVoteRequest':
-                return RequestVoteRequest(obj["dest"], obj["func_name"], RequestVoteBody(obj["body"]["term"], obj["body"]["candidateId"], obj["body"]["lastLogIdx"], obj["body"]["lastLogTerm"]))
+                return RequestVoteRequest(Address(obj["dest"]["ip"], obj["dest"]["port"]), obj["func_name"], RequestVoteBody(obj["body"]["term"], obj["body"]["candidateId"], obj["body"]["lastLogIdx"], obj["body"]["lastLogTerm"]))
             if obj["type"] == 'StringRequest':
-                return StringRequest(obj["dest"], obj["func_name"], obj["body"])
+                return StringRequest(Address(obj["dest"]["ip"], obj["dest"]["port"]), obj["func_name"], obj["body"])
             if obj["type"] == 'AddressRequest':
-                return AddressRequest(obj["dest"], obj["func_name"], Address(obj["body"]["ip"], obj["body"]["port"]))
+                return AddressRequest(Address(obj["dest"]["ip"], obj["dest"]["port"]), obj["func_name"], Address(obj["body"]["ip"], obj["body"]["port"]))
             if obj["type"] == 'ClientRequest':
-                return ClientRequest(obj["dest"], obj["func_name"], ClientRequestBody(obj["body"]["clientID"], obj["body"]["requestNumber"], obj["body"]["command"]))
+                return ClientRequest(Address(obj["dest"]["ip"], obj["dest"]["port"]), obj["func_name"], ClientRequestBody(obj["body"]["clientID"], obj["body"]["requestNumber"], obj["body"]["command"]))
             if obj["type"] == 'ConfigChangeRequest':
-                return ConfigChangeRequest(obj["dest"], obj["func_name"], [Address(elem["ip"], elem["port"]) for elem in obj["body"]])
+                return ConfigChangeRequest(Address(obj["dest"]["ip"], obj["dest"]["port"]), obj["func_name"], [Address(elem["ip"], elem["port"]) for elem in obj["body"]])
         return obj
 
 class Request:

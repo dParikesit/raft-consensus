@@ -24,6 +24,7 @@ class ResponseEncoder(JSONEncoder):
         if isinstance(o, AppendEntriesResponse):
             return {
                 "type": o.type,
+                "dest": o.dest,
                 "term": o.term,
                 "success": o.success
             }
@@ -63,6 +64,7 @@ class ResponseEncoder(JSONEncoder):
         if isinstance(o, ConfigChangeResponse):
             return{
                 "type": o.type,
+                "dest": o.dest,
                 "success": o.success
             }
 
@@ -77,7 +79,7 @@ class ResponseDecoder(JSONDecoder):
     def object_hook(self, obj):
         if isinstance(obj, dict) and "type" in obj:
             if obj["type"] == 'AppendEntriesResponse':
-                return AppendEntriesResponse(obj["term"], obj["success"])
+                return AppendEntriesResponse(Address(obj["dest"]["ip"], obj["dest"]["port"]), obj["term"], obj["success"])
             if obj["type"] == 'RequestVoteResponse':
                 return RequestVoteResponse(obj["term"], obj["voteGranted"])
             if obj["type"] == 'MembershipResponse':
@@ -89,15 +91,14 @@ class ResponseDecoder(JSONDecoder):
             if obj["type"] == 'ClientRequestLogResponse':
                 return ClientRequestLogResponse(obj["status"], obj["requestNumber"], [LogEntry(elem["term"], elem["isOp"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]])
             if obj["type"] == "ConfigChangeResponse":
-                return ConfigChangeResponse(obj["success"])
+                return ConfigChangeResponse(Address(obj["dest"]["ip"], obj["dest"]["port"]), obj["success"])
         return obj
 
 class Response:
-    __slots__ = ('type', 'dest')
+    __slots__ = ('type')
 
     def __init__(self, type: str) -> None:
         self.type: str = type
-        self.dest: Optional[Address] = None
 
     def __str__(self) -> str:
         return dumps(self, indent=2, cls=ResponseEncoder)
@@ -115,10 +116,11 @@ class MembershipResponse(Response):
         self.cluster_addr_list: List[Address]   = cluster
 
 class AppendEntriesResponse(Response):
-    __slots__ = ('term', 'success')
+    __slots__ = ('dest','term', 'success')
 
-    def __init__(self, term: int, success: bool) -> None:
+    def __init__(self, dest: Address, term: int, success: bool) -> None:
         super().__init__("AppendEntriesResponse")
+        self.dest: Address = dest
         self.term:      int     = term
         self.success:   bool    = success
 
@@ -157,8 +159,9 @@ class ClientRequestLogResponse(Response):
         self.log:           List[LogEntry]  = log
 
 class ConfigChangeResponse(Response):
-    __slots__ = ('success')
+    __slots__ = ('dest','success')
 
-    def __init__(self, success: bool) -> None:
-        super().__init__("ConfigChangeRequest")
+    def __init__(self, dest: Address, success: bool) -> None:
+        super().__init__("ConfigChangeResponse")
+        self.dest: Address = dest
         self.success: bool = success

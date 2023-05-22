@@ -329,6 +329,18 @@ class RaftNode:
                             self.currentTerm=res.term
                             self.type = RaftNode.NodeType.FOLLOWER
         else:
+            if len(self.log)>0:
+                newCommitIdx = 0
+                for idx in range(len(self.log)-1, self.commitIdx, -1):
+                    count = len(dict(filter(lambda val: val[1]-1>= idx, self.nextIdx.items())))
+                    if count >= ceil((len(self.cluster_addr_list)+1)/2) + 1:
+                        newCommitIdx = idx
+                        break
+                for idx in range(self.commitIdx, newCommitIdx+1):
+                    if self.log[idx].operation.startswith('enqueue') or self.log[idx].operation.startswith('dequeue'):
+                        self.commit_entry(idx)
+                        self.lastApplied +=1
+                self.commitIdx = newCommitIdx
             self.__print_log("Follower not found. Log replication will not run")
 
     def receiver_log_replication(self, json_request: str) -> str:
@@ -380,11 +392,11 @@ class RaftNode:
 
             if (counter < 0):
                 # No duplicate
-                self.app.apply(self.log[idx].operation)
+                self.log[idx].result = self.app.apply(self.log[idx].operation)
 
         else:
             # First log, no duplicate possible
-            self.app.apply(self.log[idx].operation)
+            self.log[idx].result = self.app.apply(self.log[idx].operation)
     
     def undo_entry(self, idx: int):
         if(idx != 0):

@@ -32,4 +32,5 @@ class MessageQueue:
         else:
             arr = re.split('\W+', operation)
             self.enqueue(arr[1])
+            print(self.__queue)
             return self.length()

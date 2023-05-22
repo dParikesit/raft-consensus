@@ -52,7 +52,7 @@ class Client:
         # Response success or failed
         if isinstance(res, ClientRequestResponse):
             if(res.status == "success"):
-                print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) {res.status}!")
+                print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) {res.status} with result {res.result}!")
             else:
                 print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) received, but not committed yet!")
 
@@ -129,6 +129,7 @@ class Client:
                     print(
                         f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Timeout!\n"
                     )
+            self.__print_response(response)
 
             
 

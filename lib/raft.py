@@ -45,10 +45,10 @@ from lib.struct.response.response import (
 
 
 class RaftNode:
-    HEARTBEAT_INTERVAL   = 1
-    ELECTION_TIMEOUT_MIN = 2.0
-    ELECTION_TIMEOUT_MAX = 3.0
-    RPC_TIMEOUT          = 0.5
+    HEARTBEAT_INTERVAL   = 3
+    ELECTION_TIMEOUT_MIN = 8.0
+    ELECTION_TIMEOUT_MAX = 12.0
+    RPC_TIMEOUT          = 2
 
     class NodeType(Enum):
         LEADER    = 1

@@ -45,10 +45,10 @@ from lib.struct.response.response import (
 
 
 class RaftNode:
-    HEARTBEAT_INTERVAL   = 4
-    ELECTION_TIMEOUT_MIN = 8.0
-    ELECTION_TIMEOUT_MAX = 12.0
-    RPC_TIMEOUT          = 12
+    HEARTBEAT_INTERVAL   = 1
+    ELECTION_TIMEOUT_MIN = 2.0
+    ELECTION_TIMEOUT_MAX = 3.0
+    RPC_TIMEOUT          = 0.5
 
     class NodeType(Enum):
         LEADER    = 1
@@ -259,7 +259,9 @@ class RaftNode:
                     if response.status=="" and self.log[idx] and self.log[idx].clientId == request.body.clientID and self.log[idx].reqNum == request.body.requestNumber:
                         response.status = "success" if self.log[idx].result else "failed"
                         response.result = self.log[idx].result
-                        
+                if response.status=="":
+                    response.status = "failed"
+
             else:
                 response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
                 self.__print_log(""""Response to Client", {response}, "\n""""")

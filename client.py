@@ -58,7 +58,7 @@ class Client:
             if res.status == "Redirect":
                 print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request redirected to [{self.ip}:{self.port}]!\n")
             else:
-                print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request failed")
+                print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Node doesn't have leader. Wait for the leader election finished!")
 
         if isinstance(res, ClientRequestLogResponse):
             print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request Log_Leader {res.status}!")
@@ -89,11 +89,7 @@ class Client:
             request = ClientRequest(contact_addr, "execute", requestBody)
             response = ClientRequestResponse(requestNumber, "failed", None)
 
-            no_leader = False
-
-            while (
-                response.status != "success" and requestNumber == response.requestNumber
-            ):
+            while (response.status != "success" and requestNumber == response.requestNumber):
                 try:
                     self.__print_request(request)
                     response = self.__send_request(request)
@@ -110,10 +106,18 @@ class Client:
 
                         contact_addr = Address(self.ip, int(self.port))
                         request = ClientRequest(contact_addr, "execute", requestBody)
+
+                        self.__print_response(response)
+
                         response = ClientRequestResponse(requestNumber, "failed", None)
                     elif response.status == "No Leader":
-                        no_leader = True
-                        break
+                        # Wait 5 seconds before retry request, so node have leader
+                        self.__print_response(response)
+                        time.sleep(5)
+                        response = ClientRequestResponse(requestNumber, "failed", None)
+                    elif response.status == "Failed":
+                        self.__print_response(response)
+                        time.sleep(5)
 
                 except ConnectionRefusedError as e:
                     raise e
@@ -123,9 +127,7 @@ class Client:
                         f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Timeout!\n"
                     )
 
-            self.__print_response(response)
-            if no_leader:
-                raise Exception("No Leader in Connection")
+            
 
     def request_log(self, requestNumber: int):
         contact_addr = Address(self.ip, int(self.port))
@@ -154,8 +156,14 @@ class Client:
                     request = ClientRequest(contact_addr, "request_log", requestBody)
                     response = ClientRequestResponse(requestNumber, "failed", None)
                 elif response.status == "No Leader":
-                    no_leader = True
-                    break
+                    # Wait 5 seconds before retry request, so node have leader
+                    self.__print_response(response)
+                    time.sleep(5)
+                    response = ClientRequestResponse(requestNumber, "failed", None)
+
+                elif response.status == "Failed":
+                    self.__print_response(response)
+                    time.sleep(5)
 
             except ConnectionRefusedError as e:
                 raise e
@@ -165,8 +173,6 @@ class Client:
                     f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Timeout!\n"
                 )
         self.__print_response(response)
-        if no_leader:
-            raise Exception("No Leader in Connection")
 
 
 if __name__ == "__main__":

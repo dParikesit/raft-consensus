@@ -295,6 +295,7 @@ class RaftNode:
         # Check whether commit index can be increased.
         print(self.log)
         print(self.nextIdx)
+        print(self.app.length())
         if len(self.log)>0:
             newCommitIdx = 0
             for idx in range(len(self.log)-1, self.commitIdx, -1):
@@ -302,11 +303,10 @@ class RaftNode:
                 if count >= ceil((len(self.cluster_addr_list)+1)/2) + 1:
                     newCommitIdx = idx
                     break
-            for idx in range(self.commitIdx, newCommitIdx+1):
-                if self.log[idx].operation.startswith('enqueue') or self.log[idx].operation.startswith('dequeue'):
-                    self.commit_entry(idx)
-                    self.lastApplied +=1
-            self.commitIdx = newCommitIdx
+            for idx in range(self.commitIdx+1, newCommitIdx+1):
+                self.commit_entry(idx)
+                self.lastApplied +=1
+            self.commitIdx = self.lastApplied
         print(self.commitIdx)
 
         if len(self.cluster_addr_list)>0:
@@ -363,7 +363,7 @@ class RaftNode:
         response.success = True
 
         # Commit until leader's commitIdx
-        if request.body.leaderCommit>=0:
+        if request.body.leaderCommit >= 0:
             for idx in range(self.commitIdx, request.body.leaderCommit+1):
                 self.commit_entry(idx)
                 self.lastApplied +=1

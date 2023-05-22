@@ -35,7 +35,7 @@ class CountdownTimer():
         self._thread.start()
 
     def handler(self):
-        asyncio.run(self._func())
+        self._func()
         if self.repeat:
             self._thread = threading.Timer(self._interval, self.handler)
             self._thread.start()

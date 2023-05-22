@@ -405,8 +405,25 @@ class RaftNode:
 
     def commit_entry(self, idx: int):
         # TODO Check duplicate and operation type
-        # Kalo sukses panggil bawah ini
-        self.app.apply(self.log[idx].operation)
+
+        if(idx != 0):
+            # Loop dari (idx - 1) sampe 0
+            counter = idx
+            while counter >= 0:
+                if(self.log[idx].clientId == self.log[counter].clientID and self.log[idx].reqNum == self.log[counter].reqNum and self.log[idx].operation == self.log[counter].operation):
+                    # clientID, reqNum, operation sama -> duplicate -> update result, don't apply
+                    self.log[idx].result = self.log[counter].result
+                    break
+                else:
+                    counter -= 1
+
+            if (counter < 0):
+                # No duplicate
+                self.app.apply(self.log[idx].operation)
+
+        else:
+            # First log, no duplicate possible
+            self.app.apply(self.log[idx].operation)
     
     def undo_entry(self, idx: int):
         # TODO Cek undo dan duplicate

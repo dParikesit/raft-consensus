@@ -255,9 +255,6 @@ class RaftNode:
                 log_entry = LogEntry(self.currentTerm, True, request.body.clientID, request.body.command, request.body.requestNumber, None)
                 self.log.append(log_entry)
                 self.log_replication()
-                print("MARKK")
-                print(self.log)
-                print(self.commitIdx)
                 for idx in range(0, self.commitIdx+1):
                     if response.status=="" and self.log[idx] and self.log[idx].clientId == request.body.clientID and self.log[idx].reqNum == request.body.requestNumber:
                         response.status = "success" if self.log[idx].result else "Failed"
@@ -303,17 +300,12 @@ class RaftNode:
             newCommitIdx = 0
             for idx in range(len(self.log)-1, self.commitIdx, -1):
                 count = len(dict(filter(lambda val: val[1]-1>= idx, self.nextIdx.items())))
-                print("COUNT: ")
-                print(count)
-                print(ceil((len(self.cluster_addr_list)+1)/2))
                 if count >= ceil((len(self.cluster_addr_list)+1)/2):
                     newCommitIdx = idx
                     break
             for idx in range(self.commitIdx+1, newCommitIdx+1):
                 self.commit_entry(idx)
                 self.lastApplied +=1
-            print("LAST APPLIED")
-            print(self.lastApplied)
             self.commitIdx = self.lastApplied
         print("commitIdx",self.commitIdx)
 
@@ -340,7 +332,6 @@ class RaftNode:
                             self.currentTerm=res.term
                             self.type = RaftNode.NodeType.FOLLOWER
             
-            print(self.nextIdx)
         else:
             self.__print_log("Follower not found. Log replication will not run")
 
@@ -386,16 +377,11 @@ class RaftNode:
         return json.dumps(response, cls=ResponseEncoder)
 
     def commit_entry(self, idx: int):
-        print("COMMIT ENTRY")
-        print(idx)
-        print(self.log)
         if(idx > 0):
             # Loop dari (idx - 1) sampe 0
-            counter = idx
+            counter = idx - 1
             while counter >= 0:
-                print(self.log)
-                print(self.log[idx].clientId == self.log[counter].clientId and self.log[idx].reqNum == self.log[counter].reqNum and self.log[idx].operation == self.log[counter].operation)
-                if(idx != counter and self.log[idx].clientId == self.log[counter].clientId and self.log[idx].reqNum == self.log[counter].reqNum and self.log[idx].operation == self.log[counter].operation):
+                if(self.log[idx].clientId == self.log[counter].clientId and self.log[idx].reqNum == self.log[counter].reqNum and self.log[idx].operation == self.log[counter].operation):
                     # clientID, reqNum, operation sama -> duplicate -> update result, don't apply
                     self.log[idx].result = self.log[counter].result
                     break
@@ -405,9 +391,6 @@ class RaftNode:
             if (counter < 0):
                 # No duplicate
                 self.log[idx].result = self.app.apply(self.log[idx].operation)
-                print("AKHIR DUPLIKAT")
-                print(self.app.apply(self.log[idx].operation))
-                print(self.log[idx].result)
 
         else:
             # First log, no duplicate possible

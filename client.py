@@ -1,7 +1,9 @@
 # python3 client.py localhost 3000 client01
-# contoh command: enqueue(5)
+# contoh 
+# command: enqueue(5)
+# command: dequeue
+# command: log
 # buat end, command: -1
-# dimana localhost 3000 nya tuh server
 
 import json
 import re
@@ -49,34 +51,22 @@ class Client:
     def __print_response(self, res: Response):
         # Response success or failed
         if isinstance(res, ClientRequestResponse):
-            print(
-                f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) {res.status}!"
-            )
+            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.requestNumber}) {res.status}!")
 
         # Response redirect
         if isinstance(res, ClientRedirectResponse):
             if res.status == "Redirect":
-                print(
-                    f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request redirected to [{self.ip}:{self.port}]!\n"
-                )
+                print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request redirected to [{self.ip}:{self.port}]!\n")
             else:
-                print(
-                    f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request failed"
-                )
+                print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request failed")
 
         if isinstance(res, ClientRequestLogResponse):
-            print(
-                f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request Log_Leader {res.status}!"
-            )
+            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request Log_Leader {res.status}!")
             if len(res.log) == 0:
-                print(
-                    f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Log is Empty!\n"
-                )
+                print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Log is Empty!\n")
             else:
                 for i in range(len(res.log)):
-                    print(
-                        f"    [term: {res.log[i].term}] [idx: {res.log[i].idx}] [ClientID: ] Request ({res.log[i].reqNum}) {res.log[i].operation}"
-                    )
+                    print(f"    [term: {res.log[i].term}] [idx: {res.log[i].idx}] [ClientID: {res.log[i].clientId}] Request ({res.log[i].reqNum}) {res.log[i].operation}")
 
     def __send_request(self, req: ClientRequest) -> Any:
         json_request = json.dumps(req, cls=RequestEncoder)
@@ -87,13 +77,9 @@ class Client:
 
     def __print_request(self, res: ClientRequest):
         if res.func_name == "execute":
-            print(
-                f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.body.requestNumber}) {res.body.command} sent!"
-            )
+            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request ({res.body.requestNumber}) {res.body.command} sent!")
         else:
-            print(
-                f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request Leader_Log sent!"
-            )
+            print(f"[{self.ip}:{self.port}] [{time.strftime('%H:%M:%S')}] [{self.clientID}] Request Leader_Log sent!")
 
     def execute(self, param: str, requestNumber: int):
         # Command yang boleh cuma enqueue(angka) dan dequeue

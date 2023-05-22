@@ -109,7 +109,7 @@ class RaftNode:
             response        = self.__retry_send_request(request)
         self.cluster_leader_addr = response.leader
         self.cluster_addr_list   = response.cluster_addr_list
-        print("Join successful")
+        self.__print_log("Join successful")
     
     def __send_request(self, req: Request) -> Any:
         try:

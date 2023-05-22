@@ -309,7 +309,7 @@ class RaftNode:
                     res: AppendEntriesResponse | None = future.result()
                     if res:
                         if res.term <= self.currentTerm:
-                            self.currentTerm=res.term
+                            # self.currentTerm=res.term
                             if res.dest:
                                 if res.success:
                                     self.nextIdx[res.dest.port] = len(self.log)
@@ -318,6 +318,7 @@ class RaftNode:
                                     self.nextIdx[res.dest.port] = 0
                                     self.matchIdx[res.dest.port] = -1
                         else:
+                            self.currentTerm=res.term
                             self.type = RaftNode.NodeType.FOLLOWER
         else:
             self.__print_log("Follower not found. Log replication will not run")

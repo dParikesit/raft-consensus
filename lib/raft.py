@@ -45,10 +45,10 @@ from lib.struct.response.response import (
 
 
 class RaftNode:
-    HEARTBEAT_INTERVAL   = 2
-    ELECTION_TIMEOUT_MIN = 8.0
-    ELECTION_TIMEOUT_MAX = 10.0
-    RPC_TIMEOUT          = 1
+    HEARTBEAT_INTERVAL   = 1
+    ELECTION_TIMEOUT_MIN = 2.0
+    ELECTION_TIMEOUT_MAX = 3.0
+    RPC_TIMEOUT          = 0.5
 
     class NodeType(Enum):
         LEADER    = 1
@@ -112,24 +112,17 @@ class RaftNode:
         print("Join successful")
     
     def __send_request(self, req: Request) -> Any:
-        node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
-        json_request = json.dumps(req, cls=RequestEncoder)
-        rpc_function = getattr(node, req.func_name)
-        result      = rpc_function(json_request)
-        response     = json.loads(result, cls=ResponseDecoder)
-        self.__print_log(str(response))
-        return response
-        # try:
-        #     node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
-        #     json_request = json.dumps(req, cls=RequestEncoder)
-        #     rpc_function = getattr(node, req.func_name)
-        #     result      = rpc_function(json_request)
-        #     response     = json.loads(result, cls=ResponseDecoder)
-        #     self.__print_log(str(response))
-        #     return response
-        # except:
-        #     self.__print_log(f"{req.type} failed")
-        #     return None
+        try:
+            node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
+            json_request = json.dumps(req, cls=RequestEncoder)
+            rpc_function = getattr(node, req.func_name)
+            result      = rpc_function(json_request)
+            response     = json.loads(result, cls=ResponseDecoder)
+            self.__print_log(str(response))
+            return response
+        except:
+            self.__print_log(f"{req.type} failed")
+            return None
     
     def __retry_send_request(self, req: Request) -> Any:
         response = None
@@ -209,14 +202,15 @@ class RaftNode:
                             self.type = RaftNode.NodeType.FOLLOWER # Bukan paling update
                             return
 
-        print("vote count",voteCount, self.currentTerm, (ceil(len(self.cluster_addr_list)/2) + 1))
         if voteCount >= (ceil(len(self.cluster_addr_list)/2) + 1):
+            self.__print_log(f"Upgrading to LEADER")
             self.type = RaftNode.NodeType.LEADER
             self.cluster_leader_addr = self.address
             self.cluster_addr_list.remove(self.address)
             for addr in self.cluster_addr_list:
                 self.nextIdx[addr.port] = 0
                 self.matchIdx[addr.port] = -1
+            self.beatTimer.start()
         else:
             self.type = RaftNode.NodeType.FOLLOWER
             self.cdTimer.reset()

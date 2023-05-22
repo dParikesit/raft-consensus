@@ -81,7 +81,7 @@ class RequestDecoder(JSONDecoder):
                         obj["body"]["leaderId"], 
                         obj["body"]["prevLogIdx"], 
                         obj["body"]["prevLogTerm"], 
-                        obj["body"]["entries"], 
+                        [LogEntry(elem["term"], elem["idx"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["body"]["entries"]], 
                         obj["body"]["leaderCommit"],
                         obj["body"]["cluster_addr_list"]
                     ),

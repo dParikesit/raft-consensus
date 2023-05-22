@@ -26,6 +26,7 @@ from lib.struct.request.request import (
     RequestEncoder,
     RequestVoteRequest,
     StringRequest,
+    ConfigChangeRequest
 )
 from lib.struct.response.response import (
     AppendEntriesResponse,
@@ -37,6 +38,7 @@ from lib.struct.response.response import (
     Response,
     ResponseDecoder,
     ResponseEncoder,
+    ConfigChangeResponse
 )
 
 
@@ -59,9 +61,6 @@ class RaftNode:
         self.address:               Address             = addr
         self.cluster_leader_addr:   Optional[Address]   = None
         self.cluster_addr_list:     List[Address]       = []
-        self.cluster_addr_new_list: List[Address]       = []
-        self.time_to_election:      int                 = 0
-        self.is__joint_consensus_running                = False
 
         # Node properties
         self.currentTerm:           int                 = 0
@@ -131,8 +130,6 @@ class RaftNode:
                         self.__print_log(f"Heartbeat to {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} died...")
                         self.__print_log(f"Node {self.cluster_addr_list[i].ip}:{self.cluster_addr_list[i].port} will be deleted...")
                         self.cluster_addr_list.pop(i)
-
-
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
 
     def __try_to_apply_membership(self, contact_addr: Address):
@@ -140,8 +137,8 @@ class RaftNode:
         request = AddressRequest(contact_addr, "apply_membership", self.address)
         response = MembershipResponse("redirected", contact_addr)
         while response.status != "success":
-            redirected_addr = Address(response.address.ip, response.address.port)
-            response        = asyncio.get_event_loop().run_until_complete(self.__send_request_async(request))
+            request         = AddressRequest(response.address, "apply_membership", self.address)
+            response        = self.__retry_request_async(request)
         self.log                 = response.log
         self.cluster_addr_list   = response.cluster_addr_list
         self.cluster_leader_addr = redirected_addr
@@ -159,7 +156,20 @@ class RaftNode:
         except Exception as error:
             print(error)
             return None
-
+        
+    def __retry_request_async(self, req: Request) -> Any:
+        while True:
+            try:
+                node         = ServerProxy(f"http://{req.dest.ip}:{req.dest.port}")
+                json_request = json.dumps(req, cls=RequestEncoder)
+                rpc_function = getattr(node, req.func_name)
+                result       = rpc_function(json_request)
+                response     = json.loads(result, cls=ResponseDecoder)
+                response.dest= req.dest
+                self.__print_log(str(response))
+                return response
+            except:
+                pass
     
     def __send_request(self, req: Request) -> Any:
         # Warning : This method is blocking
@@ -186,266 +196,32 @@ class RaftNode:
 
         response = AppendEntriesResponse(self.currentTerm, True)
         return json.dumps(response, cls=ResponseEncoder)
-    
-    
-    async def __coldnew_log_sync(self, cluster_addr_new_list: list):
-        # Try to replicate Cold,new log on C_old
-        log_entry = LogEntry(self.currentTerm, False, str(self.address), 
-                             "Cold,new", 1, None)
-        self.log.append(log_entry)
-        self.lastApplied += 1
-        
-        if len(self.cluster_addr_list) > 0:
-            nextIdx = len(self.log)
-            cluster_addr_list_notack = self.cluster_addr_list.copy()
-            count_success = 0
-            while True:
-                nextIdx = 0
-                prevLogIdx = -1
-                prevLogTerm = -1
-
-                if (nextIdx > 1):
-                    nextIdx -= 1
-                    prevLogIdx = nextIdx
-                    prevLogTerm = self.log[nextIdx - 1].term
-
-                entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, self.address, prevLogIdx, 
-                                                                        prevLogTerm, self.log, nextIdx, cluster_addr_new_list)
-
-                print("Sending Cold,new log to all Cold nodes...")
-                tasks = []
-                for cluster_addr in cluster_addr_list_notack:
-                    request: AppendEntriesMembershipRequest = AppendEntriesMembershipRequest(
-                        cluster_addr, "receiver_replicate_log_coldnew_conf", entries)
-                    task = asyncio.ensure_future(self.__send_request_async(request))
-                    tasks.append(task)
-                responses: List[AppendEntriesResponse] = await asyncio.gather(*tasks)
-
-                cluster_addr_list_notack_new = []
-                for i in range(len(responses)):
-                    response = responses[i]
-                    if not response.success:
-                        cluster_addr_list_notack_new.append(cluster_addr_list_notack[i])
-                    else:
-                        count_success += 1
-                cluster_addr_list_notack = cluster_addr_list_notack_new
-                if count_success >= len(self.cluster_addr_list) // 2: break
-            print("Cold,new log replication to Cold success...")
-            # Cold,new log committed on Cold    
-            
-        # C_new
-        # Try to replicate Cold,new log on C_new 
-        nextIdx = len(self.log)
-        cluster_addr_new_list_notack = cluster_addr_new_list.copy()
-        count_success = 0
-        while True:
-            nextIdx = 0
-            prevLogIdx = -1
-            prevLogTerm = -1
-
-            if (nextIdx > 1):
-                nextIdx -= 1
-                prevLogIdx = len(self.log)
-                prevLogTerm = self.log[nextIdx - 1].term
-            entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, self.address, prevLogIdx, 
-                                                                    prevLogTerm, self.log, nextIdx, cluster_addr_new_list)
-            print("Sending Cold,new log to all Cnew nodes...")
-            tasks = []
-            for cluster_addr in cluster_addr_new_list_notack:
-                request: AppendEntriesMembershipRequest = AppendEntriesMembershipRequest(
-                        cluster_addr, "receiver_replicate_log_coldnew_conf", entries)
-                task = asyncio.ensure_future(self.__send_request_async(request))
-                tasks.append(task)
-            responses: List[AppendEntriesResponse] = await asyncio.gather(*tasks)
-            
-            cluster_addr_new_list_notack_new = []
-            count_success = 0
-            for i in range(len(responses)):
-                response = responses[i]
-                if response == None or not response.success:
-                    cluster_addr_new_list_notack_new.append(cluster_addr_new_list_notack[i])
-                else:
-                    count_success += 1
-            cluster_addr_new_list_notack = cluster_addr_new_list_notack_new
-            if count_success >= len(cluster_addr_new_list) // 2: break
-
-        print("Cold,new log replication to Cnew success...")
-        print("Committing log...")
-        self.log[len(self.log)-1].result = "Committed"
-        self.update_commit_log()
-        self.commitIdx += 1
-        print("Cold,new log committed")
-        print("Leader log: ", self.log, "\n")
-    
-        print("Sending response to client...")
-
-        cluster_addr_list_all = self.cluster_addr_list.copy()
-        cluster_addr_list_all.extend(cluster_addr_new_list)
-        entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, self.address, None, None, self.log, self.commitIdx, [])
-        tasks = []
-        for cluster_addr in cluster_addr_list_all:
-            request: AppendEntriesMembershipRequest = AppendEntriesMembershipRequest(
-                    cluster_addr, "receiver_commit_log", entries)
-            task = asyncio.ensure_future(self.__send_request_async(request))
-            tasks.append(task)
-        await asyncio.gather(*tasks)
-        # Cold,new log committed on Cnew
-        
-    
-    async def __cnew_log_sync(self, cluster_addr_new_list: list):
-        # Try to replicate Cnew log on C_new
-        log_entry = LogEntry(self.currentTerm, False, str(self.address), 
-                             "Cnew", 1, None)
-        self.log.append(log_entry)
-        nextIdx = len(self.log)
-        self.lastApplied += 1
-        
-        len_cluster_addr_list_old = len(self.cluster_addr_list)
-        cluster_addr_list_notack = self.cluster_addr_list.copy()
-        cluster_addr_new_list_notack = cluster_addr_new_list.copy()
-       
-        count_success = 0
-        while True:
-            nextIdx = 0
-            prevLogIdx = -1
-            prevLogTerm = -1
-
-            if (nextIdx > 1):
-                nextIdx -= 1
-                prevLogIdx = len(self.log)
-                prevLogTerm = self.log[nextIdx - 1].term
-
-            entries = AppendEntriesMembershipBody(self.currentTerm, self.address, prevLogIdx, 
-                                                                    prevLogTerm, self.log, nextIdx, cluster_addr_new_list)
-            print("Sending Cold,new log to all Cnew nodes...")
-
-            count_success = 0
-            cluster_addr_list_notack_new = []
-            tasks = []
-            for cluster_addr in cluster_addr_list_notack:
-                request: AppendEntriesMembershipRequest = AppendEntriesMembershipRequest(
-                        cluster_addr, "receiver_replicate_log_cnew_conf", entries)
-                task = asyncio.ensure_future(self.__send_request_async(request))
-                tasks.append(task)
-            responses: List[AppendEntriesResponse] = await asyncio.gather(*tasks)
-            for i in range(len(responses)):
-                response = responses[i]
-                if response == None or not response.success:
-                    cluster_addr_list_notack_new.append(cluster_addr_list_notack[i])
-                else:
-                    count_success += 1
-            
-            cluster_addr_new_list_notack_new = []
-            for cluster_addr in cluster_addr_new_list_notack:
-                request: AppendEntriesMembershipRequest = AppendEntriesMembershipRequest(
-                        cluster_addr, "receiver_replicate_log_cnew_conf", entries)
-                response: AppendEntriesResponse = await self.__send_request_async(request)
-                if response == None or not response.success:
-                    cluster_addr_new_list_notack_new.append(cluster_addr)
-                else:
-                    self.cluster_addr_list.append(cluster_addr)
-                    count_success += 1
-
-            cluster_addr_new_list_notack = cluster_addr_new_list_notack_new
-            cluster_addr_list_notack = cluster_addr_list_notack_new
-            if count_success >= len_cluster_addr_list_old + len(cluster_addr_new_list) // 2: break
-
-        print("Cnew log replication to Cnew success...")
-        print("Committing log...")
-        self.log[len(self.log)-1].result = "Committed"
-        self.update_commit_log()
-        self.commitIdx += 1
-        print("Cnew log committed")
-        print("Leader log: ", self.log, "\n")
- 
-        entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, self.address, None, None, self.log, self.commitIdx, [])
-        tasks = []
-        for cluster_addr in self.cluster_addr_list:
-            request: AppendEntriesMembershipRequest = AppendEntriesMembershipRequest(
-                    cluster_addr, "receiver_commit_log", entries)
-            task = asyncio.ensure_future(self.__send_request_async(request))
-            tasks.append(task)
-        await asyncio.gather(*tasks)
-        
-        # Cnew log committed on Cnew
-        
-    async def __joint_consensus(self):
-        print("Start Joint Consensus")
-        await asyncio.sleep(5)
-        print("Joint Consensus Running...")
-        print("Cold:", self.cluster_addr_list)
-        print("Cnew:", self.cluster_addr_new_list)
-        
-        cluster_addr_new_list = self.cluster_addr_new_list.copy()
-        self.cluster_addr_new_list = []
-        
-        await self.__coldnew_log_sync(cluster_addr_new_list)
-        await self.__cnew_log_sync(cluster_addr_new_list)
-        self.is__joint_consensus_running = False
 
     def apply_membership(self, json_request: str) -> str:
-        if self.address != self.cluster_leader_addr:
-            response = MembershipResponse("failed", self.address, [], [])
-            print(response)
-            return json.dumps(response, cls=ResponseEncoder)
         request: AddressRequest = json.loads(json_request, cls=RequestDecoder)
-        print("Apply membership for node", request.body)
-        self.cluster_addr_new_list.append(request.body)
-        
-        if self.is__joint_consensus_running == False:
-            self.is__joint_consensus_running = True
-            thr = Thread(target=asyncio.run, daemon=True, args=[self.__joint_consensus()])
-            thr.start()
-            
-        response = MembershipResponse("success", self.address, self.log, self.cluster_addr_list)
-        print(response)
-        return json.dumps(response, cls=ResponseEncoder)
 
-    def receiver_replicate_log_coldnew_conf(self, json_request: str):
-        try:
-            response_json_dumps = self.receiver_replicate_log(json_request)
-            response: AppendEntriesResponse = json.loads(response_json_dumps, cls=ResponseDecoder)
-            if not response.success:
-                return response_json_dumps
-            
-            request: AppendEntriesMembershipRequest = json.loads(json_request, cls=RequestDecoder)
-            bodyReq: AppendEntriesMembershipBody = request.body
-            
-            self.cluster_addr_new_list = bodyReq.cluster_addr_list
+        if self.cluster_leader_addr and self.address != self.cluster_leader_addr:
+            response = MembershipResponse("failed", self.cluster_leader_addr)
+            return json.dumps(response, cls=ResponseEncoder)
         
-            print("Success to save Cold,new configuration...")
-            print("Follower old configuration:", self.cluster_addr_list)
-            print("Follower new configuration: ", self.cluster_addr_new_list)
-            return response_json_dumps
-        except Exception as e:
-            print(e)
-            response = AppendEntriesResponse(self.currentTerm, False)
-            print(response)
-            return json.dumps(response, cls=ResponseEncoder)
-    
-    def receiver_replicate_log_cnew_conf(self, json_request: str):
-        self.cdTimer.reset()
-        try:
-            response_json_dumps = self.receiver_replicate_log(json_request)
-            response: AppendEntriesResponse = json.loads(response_json_dumps, cls=ResponseDecoder)
-            print(response)
-            if not response.success:
-                return response_json_dumps
-            request: AppendEntriesMembershipRequest = json.loads(json_request, cls=RequestDecoder)
-            bodyReq: AppendEntriesMembershipBody = request.body
-    
-            self.cluster_addr_list.extend(bodyReq.cluster_addr_list)
-            self.cluster_addr_new_list = []
+        print("Apply membership for node", request.body)
+        self.cluster_addr_list.append(request.body)
+        
+        for addr in self.cluster_addr_list:
+            req = ConfigChangeRequest(addr, "update_addr_list", self.cluster_addr_list)
+            res = ConfigChangeResponse(False)
+            while not res.success:
+                res = self.__retry_request_async(req)
             
-            print("Success to save Cnew configuration...")
-            print("Follower configuration: ", self.cluster_addr_list)
-            
-            return response_json_dumps
-        except Exception as e:
-            print(e)
-            response = AppendEntriesResponse(self.currentTerm, False)
-            print(response)
-            return json.dumps(response, cls=ResponseEncoder)
+        response = MembershipResponse("success", self.address)
+        return json.dumps(response, cls=ResponseEncoder)
+    
+    def update_addr_list(self, json_request:str) -> str:
+        request: ConfigChangeRequest = json.loads(json_request, cls=RequestDecoder)
+        self.cluster_addr_list = request.body
+
+        response = ConfigChangeResponse(True)
+        return json.dumps(response, cls=ResponseEncoder)
     
     async def election_start(self):
         if self.cluster_leader_addr:

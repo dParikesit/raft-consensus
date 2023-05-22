@@ -38,8 +38,6 @@ class ResponseEncoder(JSONEncoder):
                 "type": o.type,
                 "status": o.status,
                 "address": o.address,
-                "log": o.log,
-                "cluster_addr_list": o.cluster_addr_list
             }
         if isinstance(o, ClientRequestResponse):
             return {
@@ -61,6 +59,11 @@ class ResponseEncoder(JSONEncoder):
                 "requestNumber" : o.requestNumber,
                 "log"           : o.log
             }
+        if isinstance(o, ConfigChangeResponse):
+            return{
+                "type": o.type,
+                "success": o.success
+            }
 
         if isinstance(o, Response):
             return {"type": o.type}
@@ -77,13 +80,15 @@ class ResponseDecoder(JSONDecoder):
             if obj["type"] == 'RequestVoteResponse':
                 return RequestVoteResponse(obj["term"], obj["voteGranted"])
             if obj["type"] == 'MembershipResponse':
-                return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]), [LogEntry(elem["term"], elem["isOp"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]], [Address(elem['ip'], elem['port']) for elem in obj["cluster_addr_list"]])
+                return MembershipResponse(obj["status"], Address(obj["address"]["ip"], obj["address"]["port"]))
             if obj["type"] == 'ClientRequestResponse':
                 return ClientRequestResponse(obj["requestNumber"], obj["status"], obj["result"])
             if obj["type"] == 'ClientRedirectResponse':
                 return ClientRedirectResponse(obj["status"], obj["address"])
             if obj["type"] == 'ClientRequestLogResponse':
                 return ClientRequestLogResponse(obj["status"], obj["requestNumber"], [LogEntry(elem["term"], elem["isOp"], elem["clientId"], elem["operation"], elem["reqNum"], elem["result"]) for elem in obj["log"]])
+            if obj["type"] == "ConfigChangeResponse":
+                return ConfigChangeResponse(obj["success"])
         return obj
 
 class Response:
@@ -102,12 +107,10 @@ class Response:
 class MembershipResponse(Response):
     __slots__ = ('status', 'address', 'log', 'cluster_addr_list')
 
-    def __init__(self, status: str, address: Address, log: List[LogEntry] = [], cluster_addr_list: List[Address] = []) -> None:
+    def __init__(self, status: str, address: Address) -> None:
         super().__init__('MembershipResponse')
         self.status: str                        = status
         self.address: Address                   = address
-        self.log: List[LogEntry]                = log
-        self.cluster_addr_list:   List[Address] = cluster_addr_list
 
 class AppendEntriesResponse(Response):
     __slots__ = ('term', 'success')
@@ -150,3 +153,10 @@ class ClientRequestLogResponse(Response):
         self.status:        str             = status
         self.requestNumber: int             = requestNumber
         self.log:           List[LogEntry]  = log
+
+class ConfigChangeResponse(Response):
+    __slots__ = ('success')
+
+    def __init__(self, success: bool) -> None:
+        super().__init__("ConfigChangeRequest")
+        self.success: bool = success

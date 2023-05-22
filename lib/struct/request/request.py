@@ -94,6 +94,8 @@ class RequestDecoder(JSONDecoder):
                 return AddressRequest(obj["dest"], obj["func_name"], Address(obj["body"]["ip"], obj["body"]["port"]))
             if obj["type"] == 'ClientRequest':
                 return ClientRequest(obj["dest"], obj["func_name"], ClientRequestBody(obj["body"]["clientID"], obj["body"]["requestNumber"], obj["body"]["command"]))
+            if obj["type"] == 'ConfigChangeRequest':
+                return ConfigChangeRequest(obj["dest"], obj["func_name"], [Address(elem["ip"], elem["port"]) for elem in obj["body"]])
         return obj
 
 class Request:
@@ -169,6 +171,17 @@ class ClientRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: ClientRequestBody) -> None:
         super().__init__("ClientRequest", dest, func_name)
         self.body: ClientRequestBody = body
+    
+    def __str__(self) -> str:
+        return super().__str__()
+
+    def __repr__(self) -> str:
+        return self.__str__()
+    
+class ConfigChangeRequest(Request):
+    def __init__(self, dest: Address, func_name: str, body: List[Address]) -> None:
+        super().__init__("ConfigChangeRequest", dest, func_name)
+        self.body: List[Address] = body
     
     def __str__(self) -> str:
         return super().__str__()

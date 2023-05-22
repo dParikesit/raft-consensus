@@ -150,7 +150,7 @@ class RaftNode:
             response = MembershipResponse("failed", self.cluster_leader_addr)
             return json.dumps(response, cls=ResponseEncoder)
         
-        print("Apply membership for node", request.body)
+        self.__print_log(f""""Apply membership for node", {request.body}""")
 
         self.cluster_addr_list.append(request.body)
 
@@ -243,24 +243,22 @@ class RaftNode:
     # Client RPCs
     def execute(self, json_request: str) -> str:
         request: ClientRequest = json.loads(json_request, cls=RequestDecoder)
-        print("Request from Client\n", request, "\n")
+        self.__print_log(f""""Request from Client\n", {request}, "\n""""")
 
         # Check leader or follower
         if self.cluster_leader_addr is not None:
             if self.address == self.cluster_leader_addr:
                 response = ClientRequestResponse(request.body.requestNumber, "success", "result")
-                print("Response to Client", response, "\n")
+                self.__print_log(f""""Response to Client", {response}, "\n""""")
                 log_entry = LogEntry(self.currentTerm, True, request.body.clientID, request.body.command, request.body.requestNumber, None)
                 self.log.append(log_entry)
                 self.log_replication()
-                print("LOG REPLICATION")
-                # time.sleep(11)
             else:
                 response = ClientRedirectResponse("Redirect", self.cluster_leader_addr)
-                print("Response to Client", response, "\n")
+                self.__print_log(""""Response to Client", {response}, "\n""""")
         else:
             response = ClientRedirectResponse("No Leader", None)
-            print("Response to Client", response, "\n")
+            self.__print_log(f""""Response to Client", response, "\n""""")
 
         return json.dumps(response, cls=ResponseEncoder)
 

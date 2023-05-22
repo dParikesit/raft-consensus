@@ -115,27 +115,63 @@ class StringRequest(Request):
         super().__init__("StringRequest", dest, func_name)
         self.body: str = body
 
+    def __str__(self) -> str:
+        return super().__str__()
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 class AddressRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: Address) -> None:
         super().__init__("AddressRequest", dest, func_name)
         self.body: Address = body
+    
+    def __str__(self) -> str:
+        return super().__str__()
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 class AppendEntriesRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: AppendEntriesBody) -> None:
         super().__init__("AppendEntriesRequest", dest, func_name)
         self.body: AppendEntriesBody = body
+    
+    def __str__(self) -> str:
+        return super().__str__()
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 class AppendEntriesMembershipRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: AppendEntriesMembershipBody) -> None:
         super().__init__("AppendEntriesMembershipRequest", dest, func_name)
         self.body: AppendEntriesMembershipBody = body
+    
+    def __str__(self) -> str:
+        return super().__str__()
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 class RequestVoteRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: RequestVoteBody) -> None:
         super().__init__("RequestVoteRequest", dest, func_name)
         self.body: RequestVoteBody = body
+    
+    def __str__(self) -> str:
+        return super().__str__()
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 class ClientRequest(Request):
     def __init__(self, dest: Address, func_name: str, body: ClientRequestBody) -> None:
         super().__init__("ClientRequest", dest, func_name)
         self.body: ClientRequestBody = body
+    
+    def __str__(self) -> str:
+        return super().__str__()
+
+    def __repr__(self) -> str:
+        return self.__str__()

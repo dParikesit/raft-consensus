@@ -4,7 +4,7 @@ import socket
 import time
 from enum import Enum
 from threading import Thread
-from typing import AbstractSet, Any, List, MutableSet, Optional, Tuple
+from typing import AbstractSet, Any, List, MutableSet, Optional, Tuple, Dict
 from xmlrpc.client import ServerProxy
 
 from lib.timer.CountdownTimer import CountdownTimer
@@ -71,9 +71,8 @@ class RaftNode:
 
         # Leader properties (Not None if leader, else None)
         # self.nextIdx:               Optional[List[int]] = None
-        self.nextIdx:               Optional[dict[int]] = {}
-        self.matchIdx:              Optional[List[int]] = None
-        self.nodeData:              Optional[dict[Address]] = {}
+        self.nextIdx:               Dict[Address, int] = {}
+        self.matchIdx:              Dict[Address, int] = {}
 
         # Follower properties
         self.cdTimer:               CountdownTimer      = CountdownTimer(RaftNode.ELECTION_TIMEOUT_MIN, RaftNode.ELECTION_TIMEOUT_MAX, self.election_start)
@@ -100,27 +99,25 @@ class RaftNode:
         request = {
             "cluster_leader_addr": self.address
         }
-        # TODO : Inform to all node this is new leader
         self.heartbeat_thread = Thread(target=asyncio.run, daemon=True, args=[self.__leader_heartbeat()])
         self.heartbeat_thread.start()
 
     async def __leader_heartbeat(self):
-        # TODO : Send periodic heartbeat
         while True:
             self.__print_log("[Leader] Sending heartbeat...")
             # self.cluster_addr_list = self.cluster_addr_new_list.copy()
             if(len(self.cluster_addr_list) > 0):
                 for i in range(len(self.cluster_addr_list)):
-                    if(self.cluster_addr_list[i].port not in self.nextIdx):
-                        self.nextIdx[self.cluster_addr_list[i].port] = 0
+                    if(self.cluster_addr_list[i] not in self.nextIdx):
+                        self.nextIdx[self.cluster_addr_list[i]] = 0
 
-                    nextIdx = self.nextIdx[self.cluster_addr_list[i].port]
+                    nextIdx = self.nextIdx[self.cluster_addr_list[i]]
+                    prevLogIdx = -1
+                    prevLogTerm = -1
+
                     if (nextIdx > 1):
                         prevLogIdx = self.log[len(self.log) - 1].idx
                         prevLogTerm = self.log[len(self.log) - 1].term
-                    elif (nextIdx == 1 or nextIdx == 0):
-                        prevLogIdx = -1
-                        prevLogTerm = -1
                     currentTerm = self.currentTerm
                     entries: AppendEntriesBody = AppendEntriesBody(currentTerm, self.address, prevLogIdx, prevLogTerm, [], nextIdx)
                     try:
@@ -136,32 +133,6 @@ class RaftNode:
 
 
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
-            '''
-            for target in self.cluster_addr_list:
-
-                request = AppendEntriesRequest(target, "heartbeat", self.address)
-                response = AppendEntriesResponse("success", target)
-
-                # kode adel
-                entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, self.nextIdx['prevLogIdx'], self.nextIdx['prevLogTerm'], self.log, self.nextIdx)
-
-                print("Sending log replication request to all nodes...")
-                print("AppendEntriesBody", entries, "\n")
-                
-                for i in range(len(self.cluster_addr_list)):
-                    if ack_array[i] == False:
-                        request: AppendEntriesRequest = AppendEntriesRequest(self.cluster_addr_list[i], "receiver_replicate_log", entries)
-                        response: AppendEntriesResponse = self.__send_request(request)
-                        if response.success == True:
-                            self.__print_log(f"Heartbeat to {target.ip}:{target.port} success...")
-                        else:
-                            self.__print_log(f"Heartbeat to {target.ip}:{target.port} failed...")
-
-                if(response.term != "success"):
-                    self.__print_log(f"Heartbeat to {target.ip}:{target.port} failed...")
-                else:
-                    self.__print_log(f"Heartbeat to {target.ip}:{target.port} success...")
-            '''
 
     def __try_to_apply_membership(self, contact_addr: Address):
         redirected_addr = contact_addr
@@ -184,7 +155,6 @@ class RaftNode:
             self.__print_log(str(response))
             return response
         except Exception as error:
-            # print("Exception occured")
             print(error)
             return None
 
@@ -216,9 +186,9 @@ class RaftNode:
         return json.dumps(response, cls=ResponseEncoder)
     
     
-    async def __coldnew_log_sync(self, request: AddressRequest, cluster_addr_new_list: list):
+    async def __coldnew_log_sync(self, cluster_addr_new_list: list):
         # Try to replicate Cold,new log on C_old
-        log_entry = LogEntry(self.currentTerm, self.commitIdx+1, self.address, 
+        log_entry = LogEntry(self.currentTerm, self.commitIdx+1, str(self.address), 
                              "Cold,new", 1, None)
         self.log.append(log_entry)
         self.lastApplied += 1
@@ -228,14 +198,15 @@ class RaftNode:
             cluster_addr_list_notack = self.cluster_addr_list.copy()
             count_success = 0
             while True:
+                nextIdx = 0
+                prevLogIdx = -1
+                prevLogTerm = -1
+
                 if (nextIdx > 1):
                     nextIdx -= 1
                     prevLogIdx = self.log[nextIdx - 1].idx
                     prevLogTerm = self.log[nextIdx - 1].term
-                elif (nextIdx == 1 or nextIdx == 0):
-                    nextIdx = 0
-                    prevLogIdx = -1
-                    prevLogTerm = -1
+
                 entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, self.address, prevLogIdx, 
                                                                         prevLogTerm, self.log, nextIdx, cluster_addr_new_list)
 
@@ -245,7 +216,7 @@ class RaftNode:
                     request: AppendEntriesMembershipRequest = AppendEntriesMembershipRequest(
                         cluster_addr, "receiver_replicate_log_coldnew_conf", entries)
                     task = asyncio.ensure_future(self.__send_request_async(request))
-                    task.append(task)
+                    tasks.append(task)
                 responses: List[AppendEntriesResponse] = await asyncio.gather(*tasks)
 
                 cluster_addr_list_notack_new = []
@@ -266,14 +237,14 @@ class RaftNode:
         cluster_addr_new_list_notack = cluster_addr_new_list.copy()
         count_success = 0
         while True:
+            nextIdx = 0
+            prevLogIdx = -1
+            prevLogTerm = -1
+
             if (nextIdx > 1):
                 nextIdx -= 1
                 prevLogIdx = self.log[nextIdx - 1].idx
                 prevLogTerm = self.log[nextIdx - 1].term
-            elif (nextIdx == 1 or nextIdx == 0):
-                nextIdx = 0
-                prevLogIdx = -1
-                prevLogTerm = -1
             entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, self.address, prevLogIdx, 
                                                                     prevLogTerm, self.log, nextIdx, cluster_addr_new_list)
             print("Sending Cold,new log to all Cnew nodes...")
@@ -308,7 +279,7 @@ class RaftNode:
 
         cluster_addr_list_all = self.cluster_addr_list.copy()
         cluster_addr_list_all.extend(cluster_addr_new_list)
-        entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, 0, None, None, self.log, self.commitIdx, [])
+        entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, self.address, None, None, self.log, self.commitIdx, [])
         tasks = []
         for cluster_addr in cluster_addr_list_all:
             request: AppendEntriesMembershipRequest = AppendEntriesMembershipRequest(
@@ -319,9 +290,9 @@ class RaftNode:
         # Cold,new log committed on Cnew
         
     
-    async def __cnew_log_sync(self, request: AddressRequest, cluster_addr_new_list: list):
+    async def __cnew_log_sync(self, cluster_addr_new_list: list):
         # Try to replicate Cnew log on C_new
-        log_entry = LogEntry(self.currentTerm, self.commitIdx+1, self.address, 
+        log_entry = LogEntry(self.currentTerm, self.commitIdx+1, str(self.address), 
                              "Cnew", 1, None)
         self.log.append(log_entry)
         nextIdx = len(self.log)
@@ -333,15 +304,16 @@ class RaftNode:
        
         count_success = 0
         while True:
+            nextIdx = 0
+            prevLogIdx = -1
+            prevLogTerm = -1
+
             if (nextIdx > 1):
                 nextIdx -= 1
                 prevLogIdx = self.log[nextIdx - 1].idx
                 prevLogTerm = self.log[nextIdx - 1].term
-            elif (nextIdx == 1 or nextIdx == 0):
-                nextIdx = 0
-                prevLogIdx = -1
-                prevLogTerm = -1
-            entries = AppendEntriesMembershipBody(self.currentTerm, 0, prevLogIdx, 
+
+            entries = AppendEntriesMembershipBody(self.currentTerm, self.address, prevLogIdx, 
                                                                     prevLogTerm, self.log, nextIdx, cluster_addr_new_list)
             print("Sending Cold,new log to all Cnew nodes...")
 
@@ -384,7 +356,7 @@ class RaftNode:
         print("Cnew log committed")
         print("Leader log: ", self.log, "\n")
  
-        entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, 0, None, None, self.log, self.commitIdx, [])
+        entries: AppendEntriesMembershipBody = AppendEntriesMembershipBody(self.currentTerm, self.address, None, None, self.log, self.commitIdx, [])
         tasks = []
         for cluster_addr in self.cluster_addr_list:
             request: AppendEntriesMembershipRequest = AppendEntriesMembershipRequest(
@@ -395,7 +367,7 @@ class RaftNode:
         
         # Cnew log committed on Cnew
         
-    async def __joint_consensus(self, request: Request):
+    async def __joint_consensus(self):
         print("Start Joint Consensus")
         await asyncio.sleep(5)
         print("Joint Consensus Running...")
@@ -405,8 +377,8 @@ class RaftNode:
         cluster_addr_new_list = self.cluster_addr_new_list.copy()
         self.cluster_addr_new_list = []
         
-        await self.__coldnew_log_sync(request, cluster_addr_new_list)
-        await self.__cnew_log_sync(request, cluster_addr_new_list)
+        await self.__coldnew_log_sync(cluster_addr_new_list)
+        await self.__cnew_log_sync(cluster_addr_new_list)
         self.is__joint_consensus_running = False
 
     def apply_membership(self, json_request: str) -> str:
@@ -420,7 +392,7 @@ class RaftNode:
         
         if self.is__joint_consensus_running == False:
             self.is__joint_consensus_running = True
-            thr = Thread(target=asyncio.run, daemon=True, args=[self.__joint_consensus(request)])
+            thr = Thread(target=asyncio.run, daemon=True, args=[self.__joint_consensus()])
             thr.start()
             
         response = MembershipResponse("success", self.address, self.log, self.cluster_addr_list)
@@ -430,8 +402,8 @@ class RaftNode:
     def receiver_replicate_log_coldnew_conf(self, json_request: str):
         try:
             response_json_dumps = self.receiver_replicate_log(json_request)
-            response: AppendEntriesResponse = json.loads(response_json_dumps, cls=RequestDecoder)
-            if not response['success']:
+            response: AppendEntriesResponse = json.loads(response_json_dumps, cls=ResponseDecoder)
+            if not response.success:
                 return response_json_dumps
             
             request: AppendEntriesMembershipRequest = json.loads(json_request, cls=RequestDecoder)
@@ -453,9 +425,9 @@ class RaftNode:
         self.cdTimer.reset()
         try:
             response_json_dumps = self.receiver_replicate_log(json_request)
-            response: AppendEntriesResponse = json.loads(response_json_dumps, cls=RequestDecoder)
+            response: AppendEntriesResponse = json.loads(response_json_dumps, cls=ResponseDecoder)
             print(response)
-            if not response['success']:
+            if not response.success:
                 return response_json_dumps
             request: AppendEntriesMembershipRequest = json.loads(json_request, cls=RequestDecoder)
             bodyReq: AppendEntriesMembershipBody = request.body
@@ -472,37 +444,6 @@ class RaftNode:
             response = AppendEntriesResponse(self.currentTerm, False)
             print(response)
             return json.dumps(response, cls=ResponseEncoder)
-
-    """
-    async def __send_membership(self, request: Request):
-        cluster_addr_send_list = self.cluster_addr_list.copy()
-        cluster_addr_send_list.remove(request.body)
-        while len(cluster_addr_send_list) > 0:
-            tasks = []
-            for i in range(len(cluster_addr_send_list)):
-                cluster_addr = cluster_addr_send_list[i]
-                request = AddressRequest(cluster_addr, "apply_membership", request.body)
-                task = asyncio.ensure_future(self.__send_request_async(request))
-                tasks.append(task)
-            responses = await asyncio.gather(*tasks)
-            
-            cluster_addr_send_list_new = []
-            for i in range(len(responses)):
-                response = responses[i]
-                if response.status != 'success':
-                    cluster_addr_send_list_new.append(cluster_addr_send_list[i])
-            cluster_addr_send_list = cluster_addr_send_list_new
-    
-    def apply_membership(self, json_request: str) -> str:
-        request: AddressRequest = json.loads(json_request, cls=RequestDecoder)
-        self.cluster_addr_list.append(request.body)
-        if self.address == self.cluster_leader_addr and len(self.cluster_addr_list) > 0:
-            thr = Thread(target=asyncio.run, daemon=True, args=[self.__send_membership(request)])
-            thr.start()
-        response = MembershipResponse("success", self.address, self.log, self.cluster_addr_list)
-        print(response)
-        return json.dumps(response, cls=ResponseEncoder)
-    """
     
     async def election_start(self):
         if self.cluster_leader_addr:
@@ -619,14 +560,14 @@ class RaftNode:
             ack_array = [False] * len(self.cluster_addr_list)
 
             while sum(bool(x) for x in ack_array) < (len(self.cluster_addr_list) // 2) + 1:
+                nextIdx = 0
+                prevLogIdx = -1
+                prevLogTerm = -1
+                
                 if (nextIdx > 1):
                     nextIdx -= 1
                     prevLogIdx = self.log[nextIdx - 1].idx
                     prevLogTerm = self.log[nextIdx - 1].term
-                elif (nextIdx == 1 or nextIdx == 0):
-                    nextIdx = 0
-                    prevLogIdx = -1
-                    prevLogTerm = -1
 
                 entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, self.address, prevLogIdx, 
                                                             prevLogTerm, self.log, nextIdx)
@@ -640,8 +581,7 @@ class RaftNode:
                         response: AppendEntriesResponse = self.__send_request(request)
                         if response.success == True:
                             ack_array[i] = True
-                            self.nextIdx[self.cluster_addr_list[i].port] = nextIdx
-                            print("Self_node_data: ", self.nodeData)
+                            self.nextIdx[self.cluster_addr_list[i]] = nextIdx
 
             print("Log replication success...")
             print("Committing log...")
@@ -652,7 +592,7 @@ class RaftNode:
             print("Leader Log: ", self.log, "\n")
             print("Sending response to client...")
 
-            entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, 0, None, None, self.log, self.commitIdx)
+            entries: AppendEntriesBody = AppendEntriesBody(self.currentTerm, self.address, None, None, self.log, self.commitIdx)
 
             for i in range(len(self.cluster_addr_list)):
                 if ack_array[i] == True:
@@ -678,8 +618,8 @@ class RaftNode:
             prevLogTerm = -1
         else:
             #print("Log: ", self.log, "\n")
-            prevLogIdx = self.log[len(self.log) - 1]['idx']
-            prevLogTerm = self.log[len(self.log) - 1]['term']
+            prevLogIdx = self.log[len(self.log) - 1].idx
+            prevLogTerm = self.log[len(self.log) - 1].term
         print(request.body.term, self.currentTerm, prevLogIdx,  request.body.prevLogIdx, prevLogTerm, request.body.prevLogTerm)
         if(request.body.term > self.currentTerm):
             self.currentTerm = request.body.term
@@ -696,7 +636,7 @@ class RaftNode:
                 for i in range(request.body.leaderCommit, len(request.body.entries)):
                     self.log.append(request.body.entries[i])
                     self.lastApplied += 1
-                    if (request.body.entries[i]['result'] != None):
+                    if (request.body.entries[i].result != None):
                         self.commitIdx += 1
                          
                 print("Success append log to follower...")
@@ -737,4 +677,4 @@ class RaftNode:
             else:  
                 self.log[len(self.log) -1].result = "-1"
         else:
-            self.log[len(self.log) -1].result = len(results) + 1
+            self.log[len(self.log) -1].result = str(len(results) + 1)

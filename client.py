@@ -199,7 +199,7 @@ if __name__ == "__main__":
 
         try:
             param = ""
-            if re.match(patternEnq, value) or value == "dequeue":
+            if value.startswith("enqueue") or value == "dequeue":
                 param = value
                 requestNumber += 1
                 client.execute(param, requestNumber)

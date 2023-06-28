@@ -158,7 +158,7 @@ class RaftNode:
             futures = []
             for addr in self.cluster_addr_list:
                 if addr!=request.body:
-                    futures.append(executor.submit(self.__retry_send_request, ConfigChangeRequest(addr, "update_addr_list", self.cluster_addr_list + [request.body])))
+                    futures.append(executor.submit(self.__retry_send_request, ConfigChangeRequest(addr, "update_addr_list", self.cluster_addr_list)))
             for future in as_completed(futures):
                 res: ConfigChangeResponse | None = future.result()
                 if res and res.success:
@@ -299,7 +299,11 @@ class RaftNode:
         if len(self.log)>0:
             newCommitIdx = 0
             for idx in range(len(self.log)-1, self.commitIdx, -1):
-                count = len(dict(filter(lambda val: val[1]-1>= idx, self.nextIdx.items())))
+                count = 1
+                for i in self.nextIdx:
+                    print(self.nextIdx[i])
+                    if self.nextIdx[i] - 1 >= idx or self.nextIdx[i] == 0:
+                        count += 1
                 if count >= ceil((len(self.cluster_addr_list)+1)/2):
                     newCommitIdx = idx
                     break
